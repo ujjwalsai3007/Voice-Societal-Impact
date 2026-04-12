@@ -78,35 +78,35 @@
           "id": "3.1",
           "title": "Qdrant client singleton",
           "description": "Create src/services/qdrant.ts with connection pooling and health check",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/services/qdrant.ts", "tests/qdrant.test.ts"]
         },
         {
           "id": "3.2",
           "title": "Collection bootstrap",
-          "description": "Script to create user_memory collection with dense (384-dim) + sparse vectors",
-          "status": "pending",
+          "description": "ensureCollection() creates user_memory collection with 384-dim cosine vectors",
+          "status": "completed",
           "files": ["src/services/qdrant.ts"]
         },
         {
           "id": "3.3",
           "title": "Embedding service",
-          "description": "Create src/services/embedding.ts to generate dense embeddings (lightweight model or mock for hackathon)",
-          "status": "pending",
+          "description": "Create src/services/embedding.ts with deterministic trigram-hash embeddings (384-dim)",
+          "status": "completed",
           "files": ["src/services/embedding.ts", "tests/embedding.test.ts"]
         },
         {
           "id": "3.4",
           "title": "Memory store",
           "description": "upsertMemory(userId, text, metadata) — store user interaction context as vector points",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/services/memory.ts", "tests/memory.test.ts"]
         },
         {
           "id": "3.5",
           "title": "Memory recall",
-          "description": "recallMemory(userId, query, topK) — hybrid search with RRF fusion for context-aware responses",
-          "status": "pending",
+          "description": "recallMemory(userId, query, topK) — cosine similarity search with userId filter for context-aware responses",
+          "status": "completed",
           "files": ["src/services/memory.ts", "tests/memory.test.ts"]
         }
       ]
