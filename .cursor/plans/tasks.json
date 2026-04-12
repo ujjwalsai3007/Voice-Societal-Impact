@@ -44,28 +44,28 @@
           "id": "2.1",
           "title": "Zod schemas for Vapi",
           "description": "Create src/webhooks/schemas.ts with VapiToolCallRequest and VapiToolCallResponse zod schemas",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/webhooks/schemas.ts", "tests/webhooks-schemas.test.ts"]
         },
         {
           "id": "2.2",
           "title": "Webhook router",
           "description": "Create src/webhooks/router.ts with POST /webhook/vapi route that validates, dispatches to tool handlers, and returns results",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/webhooks/router.ts", "tests/webhooks-router.test.ts"]
         },
         {
           "id": "2.3",
           "title": "Signature verification middleware",
           "description": "Verify x-vapi-signature HMAC-SHA256 header on incoming webhook requests",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/webhooks/verify.ts", "tests/webhooks-verify.test.ts"]
         },
         {
           "id": "2.4",
           "title": "Tool dispatcher",
           "description": "Map tool names (checkBalance, sendMoney, getTransactionHistory) to handler functions",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/webhooks/dispatcher.ts", "tests/webhooks-dispatcher.test.ts"]
         }
       ]
