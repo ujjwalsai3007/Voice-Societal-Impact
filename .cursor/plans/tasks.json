@@ -119,29 +119,29 @@
           "id": "4.1",
           "title": "Account store",
           "description": "In-memory map of userId to balance in src/services/upi.ts",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/services/upi.ts", "tests/upi.test.ts"]
         },
         {
           "id": "4.2",
           "title": "checkBalance handler",
           "description": "Returns current balance for a user",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/services/upi.ts", "tests/upi.test.ts"]
         },
         {
           "id": "4.3",
           "title": "sendMoney handler",
           "description": "Validates sender balance, deducts, credits recipient, returns confirmation string",
-          "status": "pending",
+          "status": "completed",
           "files": ["src/services/upi.ts", "tests/upi.test.ts"]
         },
         {
           "id": "4.4",
           "title": "getTransactionHistory handler",
           "description": "Returns last N transactions from in-memory ledger, stores each as Qdrant memory point",
-          "status": "pending",
-          "files": ["src/services/upi.ts", "tests/upi.test.ts"]
+          "status": "completed",
+          "files": ["src/services/upi.ts", "tests/upi.test.ts", "src/services/upi-tools.ts", "tests/upi-tools.test.ts"]
         }
       ]
     },

@@ -2,10 +2,18 @@ import { Hono } from "hono";
 import { logger as pinoLogger } from "./lib/logger.js";
 import { createWebhookRouter } from "./webhooks/router.js";
 import { loadConfig } from "./lib/config.js";
+import { registerUpiTools } from "./services/upi-tools.js";
+
+let upiToolsRegistered = false;
 
 export function createApp(vapiSecret?: string): Hono {
   const secret = vapiSecret ?? process.env["VAPI_SECRET"] ?? "";
   const app = new Hono();
+
+  if (!upiToolsRegistered) {
+    registerUpiTools();
+    upiToolsRegistered = true;
+  }
 
   app.use("*", async (c, next) => {
     const start = performance.now();
