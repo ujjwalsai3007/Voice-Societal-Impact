@@ -1,0 +1,51 @@
+---
+description: Vapi webhook handler conventions for request/response formatting
+globs: src/webhooks/**/*.ts
+alwaysApply: false
+---
+
+# Vapi Webhook Handler Rules
+
+## Incoming Request Shape
+
+Every Vapi tool-call webhook delivers a POST body with this structure. Always validate with the zod schema from `src/webhooks/schemas.ts`:
+
+```typescript
+interface VapiToolCallRequest {
+  message: {
+    type: "tool-calls";
+    call: Record<string, unknown>;
+    toolWithToolCallList: Array<{
+      name: string;
+      toolCall: {
+        id: string;
+        parameters: Record<string, unknown>;
+      };
+    }>;
+  };
+}
+```
+
+## Required Response Shape
+
+Every handler MUST return this exact structure via `c.json()`:
+
+```typescript
+interface VapiToolCallResponse {
+  results: Array<{
+    toolCallId: string;
+    result?: string;
+    error?: string;
+  }>;
+}
+```
+
+## Hard Rules
+
+- Always return HTTP 200, even when reporting errors. Vapi ignores non-200 responses.
+- `result` and `error` values must be flat, single-line strings. Never return objects, arrays, or multi-line strings.
+- Match `toolCallId` from the request exactly — copy it, do not generate a new one.
+- Validate every incoming payload with the zod schema before processing. Return a structured error result on validation failure.
+- Handlers must complete within 5 seconds (Vapi timeout). Our internal target is < 300ms.
+- Use Hono's `c.json()` to send responses. Do not construct raw `Response` objects.
+- Never throw unhandled exceptions — catch all errors and return them as `{ error: "..." }` in the results array.
