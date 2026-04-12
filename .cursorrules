@@ -8,6 +8,8 @@
 
 3. **Do NOT modify test files unless the user specifically asks you to.** Tests are the source of truth for expected behavior. If a test is failing, fix the implementation — not the test.
 
+4. **Do NOT add "Made with Cursor" or any promotional/attribution footers** to commit messages, PR descriptions, or any generated content. Keep all git messages clean and professional.
+
 ## Workflow: Test-Driven Development (TDD)
 
 We follow strict TDD for all new functionality:
