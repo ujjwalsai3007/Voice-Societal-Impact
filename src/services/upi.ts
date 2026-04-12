@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { logger } from "../lib/logger.js";
+import { upsertMemory } from "./memory.js";
 
 const DEFAULT_BALANCE = 10000;
 
@@ -80,6 +81,16 @@ export async function sendMoney(
     { txId: tx.id, senderId, receiverId, amount },
     "Money transferred",
   );
+
+  const memoryText = `Sent ₹${amount} from ${senderId} to ${receiverId} on ${tx.timestamp}. Transaction ID: ${tx.id}.`;
+  upsertMemory(senderId, memoryText, { category: "transaction", txId: tx.id }).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for sender");
+  });
+  upsertMemory(receiverId, memoryText, { category: "transaction", txId: tx.id }).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for receiver");
+  });
 
   return `Successfully sent ₹${amount} from ${senderId} to ${receiverId}. Transaction ID: ${tx.id}.`;
 }
