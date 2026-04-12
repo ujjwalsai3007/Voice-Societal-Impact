@@ -1,25 +1,28 @@
+import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { logger as pinoLogger } from "./lib/logger.js";
-import { createWebhookRouter } from "./webhooks/router.js";
 import { loadConfig } from "./lib/config.js";
+import { createWebhookRouter } from "./webhooks/router.js";
 import { registerUpiTools } from "./services/upi-tools.js";
-
-let upiToolsRegistered = false;
+import { createQdrantClient, ensureCollection, checkQdrantHealth, COLLECTION_NAME, VECTOR_SIZE } from "./services/qdrant.js";
 
 export function createApp(vapiSecret?: string): Hono {
   const secret = vapiSecret ?? process.env["VAPI_SECRET"] ?? "";
   const app = new Hono();
-
-  if (!upiToolsRegistered) {
-    registerUpiTools();
-    upiToolsRegistered = true;
-  }
 
   app.use("*", async (c, next) => {
     const start = performance.now();
     await next();
     const ms = Math.round(performance.now() - start);
     c.res.headers.set("X-Response-Time", `${ms}ms`);
+
+    if (ms > 300) {
+      pinoLogger.warn(
+        { method: c.req.method, path: c.req.path, responseTimeMs: ms },
+        "Response exceeded 300ms latency target",
+      );
+    }
+
     pinoLogger.info(
       { method: c.req.method, path: c.req.path, status: c.res.status, responseTimeMs: ms },
       "request completed",
@@ -43,6 +46,52 @@ export function createApp(vapiSecret?: string): Hono {
   });
 
   return app;
+}
+
+export async function warmUpQdrant(url: string, apiKey?: string): Promise<void> {
+  try {
+    createQdrantClient(url, apiKey || undefined);
+    const healthy = await checkQdrantHealth();
+
+    if (healthy) {
+      await ensureCollection(COLLECTION_NAME, VECTOR_SIZE);
+      pinoLogger.info("Qdrant warm-up complete: connection established and collection ensured");
+    } else {
+      pinoLogger.warn("Qdrant warm-up: health check failed, will retry on first request");
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    pinoLogger.error({ error: message }, "Qdrant warm-up failed — continuing without pre-connection");
+  }
+}
+
+async function startServer(): Promise<void> {
+  const config = loadConfig();
+
+  await warmUpQdrant(config.qdrantUrl, config.qdrantApiKey);
+
+  registerUpiTools();
+
+  const app = createApp(config.vapiSecret);
+
+  serve(
+    { fetch: app.fetch, port: config.port },
+    (info) => {
+      pinoLogger.info(
+        { port: info.port, address: info.address },
+        "VoicePay Assist server started",
+      );
+    },
+  );
+}
+
+const isMainModule = process.argv[1]?.endsWith("index.ts") || process.argv[1]?.endsWith("index.js");
+if (isMainModule) {
+  startServer().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    pinoLogger.error({ error: message }, "Failed to start server");
+    process.exit(1);
+  });
 }
 
 export const app = createApp();
