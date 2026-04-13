@@ -49,16 +49,40 @@ export async function ensureCollection(
   const qdrant = getQdrantClient();
   const { exists } = await qdrant.collectionExists(name);
 
-  if (exists) {
+  if (!exists) {
+    await qdrant.createCollection(name, {
+      vectors: {
+        size: vectorSize,
+        distance: "Cosine",
+      },
+    });
+    logger.info({ collection: name, vectorSize }, "Collection created");
+  } else {
     logger.info({ collection: name }, "Collection already exists");
-    return;
   }
 
-  await qdrant.createCollection(name, {
-    vectors: {
-      size: vectorSize,
-      distance: "Cosine",
-    },
-  });
-  logger.info({ collection: name, vectorSize }, "Collection created");
+  await ensurePayloadIndex(qdrant, name, "userId", "keyword");
+}
+
+async function ensurePayloadIndex(
+  qdrant: QdrantClient,
+  collection: string,
+  field: string,
+  schema: "keyword" | "integer" | "float" | "text",
+): Promise<void> {
+  try {
+    await qdrant.createPayloadIndex(collection, {
+      field_name: field,
+      field_schema: schema,
+      wait: true,
+    });
+    logger.info({ collection, field, schema }, "Payload index ensured");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message.includes("already exists")) {
+      logger.info({ collection, field }, "Payload index already exists");
+      return;
+    }
+    logger.warn({ collection, field, error: message }, "Payload index creation warning");
+  }
 }

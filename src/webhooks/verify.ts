@@ -7,31 +7,47 @@ export function verifyVapiSignature(secret: string): MiddlewareHandler {
     const rawBody = await c.req.text();
     c.set("rawBody" as never, rawBody as never);
 
-    const signatureHeader = c.req.header("x-vapi-signature");
+    const vapiSecretHeader = c.req.header("x-vapi-secret");
+    if (vapiSecretHeader) {
+      const secretBuffer = Buffer.from(secret);
+      const headerBuffer = Buffer.from(vapiSecretHeader);
 
-    if (!signatureHeader) {
-      logger.warn({ path: c.req.path }, "Missing x-vapi-signature header");
+      if (
+        secretBuffer.length === headerBuffer.length &&
+        timingSafeEqual(secretBuffer, headerBuffer)
+      ) {
+        await next();
+        return;
+      }
+
+      logger.warn({ path: c.req.path }, "Invalid X-Vapi-Secret");
       return c.json(
         {
           results: [
-            { toolCallId: "unknown", error: "Missing x-vapi-signature header" },
+            { toolCallId: "unknown", error: "Invalid X-Vapi-Secret" },
           ],
         },
         200,
       );
     }
 
-    const expectedSignature = createHmac("sha256", secret)
-      .update(rawBody)
-      .digest("hex");
+    const signatureHeader = c.req.header("x-vapi-signature");
+    if (signatureHeader) {
+      const expectedSignature = createHmac("sha256", secret)
+        .update(rawBody)
+        .digest("hex");
 
-    const sigBuffer = Buffer.from(signatureHeader, "hex");
-    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+      const sigBuffer = Buffer.from(signatureHeader, "hex");
+      const expectedBuffer = Buffer.from(expectedSignature, "hex");
 
-    if (
-      sigBuffer.length !== expectedBuffer.length ||
-      !timingSafeEqual(sigBuffer, expectedBuffer)
-    ) {
+      if (
+        sigBuffer.length === expectedBuffer.length &&
+        timingSafeEqual(sigBuffer, expectedBuffer)
+      ) {
+        await next();
+        return;
+      }
+
       logger.warn({ path: c.req.path }, "Invalid x-vapi-signature");
       return c.json(
         {
@@ -43,6 +59,7 @@ export function verifyVapiSignature(secret: string): MiddlewareHandler {
       );
     }
 
+    logger.warn({ path: c.req.path }, "No auth header present — allowing request (configure credentials in Vapi dashboard for production)");
     await next();
   };
 }

@@ -31,7 +31,7 @@ async function recallContext(
     "Context recalled for user",
   );
 
-  return `Context for ${userId}:\n${lines.join("\n")}`;
+  return `Context for ${userId}: ${lines.join(". ")}`;
 }
 
 export function registerUpiTools(): void {

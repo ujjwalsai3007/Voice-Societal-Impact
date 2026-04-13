@@ -36,7 +36,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
   describe("checkBalance", () => {
     it("should return a human-readable string with the user's balance", async () => {
       const result = await checkBalance({ userId: "user-abc" });
-      expect(result).toContain("10000");
+      expect(result).toContain("10,000 rupees");
       expect(result).toContain("user-abc");
     });
 
@@ -55,7 +55,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
         amount: 500,
       });
       const result = await checkBalance({ userId: "user-abc" });
-      expect(result).toContain("9500");
+      expect(result).toContain("9,500 rupees");
     });
   });
 
@@ -67,7 +67,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
         amount: 2000,
       });
 
-      expect(result).toContain("2000");
+      expect(result).toContain("2,000 rupees");
       expect(result).toContain("user-a");
       expect(result).toContain("user-b");
 
@@ -149,7 +149,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
         receiverId: "user-b",
         amount: 10000,
       });
-      expect(result).toContain("10000");
+      expect(result).toContain("10,000 rupees");
       expect(getBalance("user-a")).toBe(0);
       expect(getBalance("user-b")).toBe(20000);
     });

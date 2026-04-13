@@ -62,14 +62,14 @@ describe("Webhook Router (src/webhooks/router.ts)", () => {
       expect(json.results[0].result).toBe("Balance: Rs 5000");
     });
 
-    it("should return 200 with error for an invalid payload structure", async () => {
+    it("should return 200 with error for an invalid tool-calls payload structure", async () => {
       const { createWebhookRouter } = await import("../src/webhooks/router.js");
       const { clearToolHandlers } = await import("../src/webhooks/dispatcher.js");
       clearToolHandlers();
 
       const router = createWebhookRouter(TEST_SECRET);
 
-      const body = JSON.stringify({ invalid: "payload" });
+      const body = JSON.stringify({ message: { type: "tool-calls" } });
       const signature = signPayload(body, TEST_SECRET);
 
       const res = await router.request("/webhook/vapi", {
@@ -85,6 +85,30 @@ describe("Webhook Router (src/webhooks/router.ts)", () => {
       const json = await res.json();
       expect(json).toHaveProperty("results");
       expect(json.results[0]).toHaveProperty("error");
+    });
+
+    it("should return 200 with empty response for non-tool-call events", async () => {
+      const { createWebhookRouter } = await import("../src/webhooks/router.js");
+      const { clearToolHandlers } = await import("../src/webhooks/dispatcher.js");
+      clearToolHandlers();
+
+      const router = createWebhookRouter(TEST_SECRET);
+
+      const body = JSON.stringify({ message: { type: "status-update" } });
+      const signature = signPayload(body, TEST_SECRET);
+
+      const res = await router.request("/webhook/vapi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-vapi-signature": signature,
+        },
+        body,
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json).toEqual({});
     });
 
     it("should return 200 with error when signature verification fails", async () => {
@@ -207,15 +231,12 @@ describe("Webhook Router (src/webhooks/router.ts)", () => {
   });
 
   describe("Other routes", () => {
-    it("should reject GET /webhook/vapi with signature error (Vapi only sends POST)", async () => {
+    it("should return 404 for GET /webhook/vapi (Vapi only sends POST)", async () => {
       const { createWebhookRouter } = await import("../src/webhooks/router.js");
       const router = createWebhookRouter(TEST_SECRET);
 
       const res = await router.request("/webhook/vapi", { method: "GET" });
-      // Signature middleware intercepts all methods on /webhook/* and returns 200 with error
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.results[0]).toHaveProperty("error");
+      expect(res.status).toBe(404);
     });
   });
 });

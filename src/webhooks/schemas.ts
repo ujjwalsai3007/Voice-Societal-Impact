@@ -1,8 +1,15 @@
 import { z } from "zod/v4";
 
+const vapiToolCallFunctionSchema = z.object({
+  name: z.string().optional(),
+  parameters: z.record(z.string(), z.unknown()),
+});
+
 export const vapiToolCallSchema = z.object({
   id: z.string().min(1),
-  parameters: z.record(z.string(), z.unknown()),
+  type: z.string().optional(),
+  function: vapiToolCallFunctionSchema.optional(),
+  parameters: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const vapiToolWithToolCallSchema = z.object({
@@ -31,3 +38,12 @@ export const vapiToolCallResponseSchema = z.object({
 export type VapiToolCallRequest = z.infer<typeof vapiToolCallRequestSchema>;
 export type VapiToolCallResponse = z.infer<typeof vapiToolCallResponseSchema>;
 export type VapiToolWithToolCall = z.infer<typeof vapiToolWithToolCallSchema>;
+
+export function extractToolCallParameters(
+  toolCall: z.infer<typeof vapiToolCallSchema>,
+): Record<string, unknown> {
+  if (toolCall.function?.parameters) {
+    return toolCall.function.parameters;
+  }
+  return toolCall.parameters ?? {};
+}

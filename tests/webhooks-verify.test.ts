@@ -43,7 +43,7 @@ describe("Signature Verification Middleware (src/webhooks/verify.ts)", () => {
     expect(json).toEqual({ ok: true });
   });
 
-  it("should return 200 with error when signature header is missing", async () => {
+  it("should allow requests through when no auth header is present (Vapi without credentials)", async () => {
     const { verifyVapiSignature } = await import("../src/webhooks/verify.js");
 
     const app = new Hono();
@@ -56,12 +56,9 @@ describe("Signature Verification Middleware (src/webhooks/verify.ts)", () => {
       body: JSON.stringify({ message: {} }),
     });
 
-    // Vapi expects 200 even on errors
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toHaveProperty("results");
-    expect(json.results[0]).toHaveProperty("error");
-    expect(json.results[0].error).toContain("signature");
+    expect(json).toEqual({ ok: true });
   });
 
   it("should return 200 with error when signature is invalid", async () => {

@@ -12,6 +12,10 @@ export interface Transaction {
   timestamp: string;
 }
 
+function spokenRupees(amount: number): string {
+  return `${amount.toLocaleString("en-IN")} rupees`;
+}
+
 const accounts = new Map<string, number>();
 const ledger: Transaction[] = [];
 let txCounter = 0;
@@ -39,7 +43,7 @@ export async function checkBalance(
   const { userId } = checkBalanceSchema.parse(params);
   const balance = getBalance(userId);
   logger.info({ userId, balance }, "Balance checked");
-  return `Account ${userId} has a balance of ₹${balance}.`;
+  return `Account ${userId} has a balance of ${spokenRupees(balance)}.`;
 }
 
 const sendMoneySchema = z.object({
@@ -60,7 +64,7 @@ export async function sendMoney(
   const senderBalance = getBalance(senderId);
   if (senderBalance < amount) {
     throw new Error(
-      `Insufficient funds: ${senderId} has ₹${senderBalance} but tried to send ₹${amount}`,
+      `Insufficient funds: ${senderId} has ${spokenRupees(senderBalance)} but tried to send ${spokenRupees(amount)}`,
     );
   }
 
@@ -82,7 +86,7 @@ export async function sendMoney(
     "Money transferred",
   );
 
-  const memoryText = `Sent ₹${amount} from ${senderId} to ${receiverId} on ${tx.timestamp}. Transaction ID: ${tx.id}.`;
+  const memoryText = `Sent ${spokenRupees(amount)} from ${senderId} to ${receiverId} on ${tx.timestamp}. Transaction ID: ${tx.id}.`;
   upsertMemory(senderId, memoryText, { category: "transaction", txId: tx.id }).catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : "Unknown error";
     logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for sender");
@@ -92,7 +96,7 @@ export async function sendMoney(
     logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for receiver");
   });
 
-  return `Successfully sent ₹${amount} from ${senderId} to ${receiverId}. Transaction ID: ${tx.id}.`;
+  return `Successfully sent ${spokenRupees(amount)} from ${senderId} to ${receiverId}. New balance for ${senderId} is ${spokenRupees(getBalance(senderId))}.`;
 }
 
 const getTransactionHistorySchema = z.object({
@@ -118,7 +122,7 @@ export async function getTransactionHistory(
     const direction = tx.senderId === userId ? "Sent" : "Received";
     const counterparty =
       tx.senderId === userId ? tx.receiverId : tx.senderId;
-    return `${direction} ₹${tx.amount} ${direction === "Sent" ? "to" : "from"} ${counterparty} (${tx.id}, ${tx.timestamp})`;
+    return `${direction} ${spokenRupees(tx.amount)} ${direction === "Sent" ? "to" : "from"} ${counterparty}`;
   });
 
   logger.info(
@@ -126,5 +130,5 @@ export async function getTransactionHistory(
     "Transaction history retrieved",
   );
 
-  return `Transaction history for ${userId}:\n${lines.join("\n")}`;
+  return `Transaction history for ${userId}: ${lines.join(". ")}`;
 }

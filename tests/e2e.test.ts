@@ -68,7 +68,7 @@ describe("End-to-End Webhook Cycle", () => {
     const json = (await res.json()) as { results: Array<{ toolCallId: string; result?: string; error?: string }> };
     expect(json.results).toHaveLength(1);
     expect(json.results[0]!.toolCallId).toBe("tc-e2e-cb");
-    expect(json.results[0]!.result).toContain("10000");
+    expect(json.results[0]!.result).toContain("10,000 rupees");
     expect(json.results[0]!.error).toBeUndefined();
   });
 
@@ -101,7 +101,7 @@ describe("End-to-End Webhook Cycle", () => {
 
     expect(res.status).toBe(200);
     const json = (await res.json()) as { results: Array<{ toolCallId: string; result?: string; error?: string }> };
-    expect(json.results[0]!.result).toContain("2500");
+    expect(json.results[0]!.result).toContain("2,500 rupees");
     expect(json.results[0]!.result).toContain("alice");
     expect(json.results[0]!.result).toContain("bob");
 
@@ -165,7 +165,7 @@ describe("End-to-End Webhook Cycle", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { results: Array<{ toolCallId: string; result?: string; error?: string }> };
     expect(json.results[0]!.toolCallId).toBe("tc-e2e-hist");
-    expect(json.results[0]!.result).toContain("1000");
+    expect(json.results[0]!.result).toContain("1,000 rupees");
     expect(json.results[0]!.result).toContain("charlie");
   });
 

@@ -37,7 +37,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]!.toolCallId).toBe("tc-cb-1");
-      expect(results[0]!.result).toContain("10000");
+      expect(results[0]!.result).toContain("10,000 rupees");
       expect(results[0]!.error).toBeUndefined();
     });
 
@@ -54,7 +54,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]!.toolCallId).toBe("tc-sm-1");
-      expect(results[0]!.result).toContain("1000");
+      expect(results[0]!.result).toContain("1,000 rupees");
       expect(results[0]!.result).toContain("user-a");
       expect(results[0]!.result).toContain("user-b");
       expect(results[0]!.error).toBeUndefined();
@@ -114,8 +114,8 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
       ]);
 
       expect(results).toHaveLength(2);
-      expect(results[0]!.result).toContain("10000");
-      expect(results[1]!.result).toContain("10000");
+      expect(results[0]!.result).toContain("10,000 rupees");
+      expect(results[1]!.result).toContain("10,000 rupees");
     });
   });
 });

@@ -45,7 +45,8 @@ export async function dispatchToolCalls(
       }
 
       try {
-        const result = await handler(tc.toolCall.parameters);
+        const parameters = tc.toolCall.parameters ?? {};
+        const result = await handler(parameters);
         logger.info({ tool: tc.name, toolCallId: tc.toolCall.id }, "Tool call succeeded");
         return { toolCallId: tc.toolCall.id, result };
       } catch (err: unknown) {

@@ -4,9 +4,9 @@
   "description": "Voice-first financial inclusion AI agent using Vapi and Qdrant",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node --env-file=.env dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "load-test": "tsx scripts/load-test.ts"
