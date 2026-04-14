@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { logger } from "../lib/logger.js";
 import { upsertMemory } from "./memory.js";
 
-const DEFAULT_BALANCE = 10000;
+const DEFAULT_BALANCE = 9000;
 
 export interface Transaction {
   id: string;
@@ -13,7 +13,8 @@ export interface Transaction {
 }
 
 function spokenRupees(amount: number): string {
-  return `${amount.toLocaleString("en-IN")} rupees`;
+  const formatted = amount.toString().replace(/\B(?=(\d{2})*\d{3}(?!\d))/g, ",");
+  return `${formatted} rupees`;
 }
 
 const accounts = new Map<string, number>();
