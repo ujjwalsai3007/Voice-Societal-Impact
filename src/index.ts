@@ -1,10 +1,17 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { logger as pinoLogger } from "./lib/logger.js";
 import { loadConfig } from "./lib/config.js";
 import { createWebhookRouter } from "./webhooks/router.js";
 import { registerUpiTools } from "./services/upi-tools.js";
 import { createQdrantClient, ensureCollection, checkQdrantHealth, COLLECTION_NAME, VECTOR_SIZE } from "./services/qdrant.js";
+import {
+  getEvents,
+  getFraudAlerts,
+  getStats,
+  getTransactions,
+} from "./services/event-store.js";
 
 export function createApp(vapiSecret?: string): Hono {
   const secret = vapiSecret ?? process.env["VAPI_SECRET"] ?? "";
@@ -29,11 +36,36 @@ export function createApp(vapiSecret?: string): Hono {
     );
   });
 
+  app.use(
+    "/api/*",
+    cors({
+      origin: process.env["DASHBOARD_ORIGIN"] ?? "*",
+    }),
+  );
+
   app.get("/health", (c) => {
     return c.json({
       status: "ok",
       timestamp: new Date().toISOString(),
     });
+  });
+
+  app.get("/api/events", (c) => {
+    const limitRaw = c.req.query("limit");
+    const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
+    return c.json({ events: getEvents(limit) });
+  });
+
+  app.get("/api/transactions", (c) => {
+    return c.json({ transactions: getTransactions() });
+  });
+
+  app.get("/api/fraud-alerts", (c) => {
+    return c.json({ fraudAlerts: getFraudAlerts() });
+  });
+
+  app.get("/api/stats", (c) => {
+    return c.json(getStats());
   });
 
   if (secret) {

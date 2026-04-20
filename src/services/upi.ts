@@ -1,8 +1,15 @@
 import { z } from "zod/v4";
 import { logger } from "../lib/logger.js";
 import { upsertMemory } from "./memory.js";
+import { checkVelocity, recordTransaction, resetFraudState } from "./fraud.js";
+import { verifyPin, resetPinStore } from "./pin.js";
+import { logEvent } from "./event-store.js";
 
-const DEFAULT_BALANCE = 9000;
+const DEFAULT_BALANCE = 10000;
+const MAX_PIN_ATTEMPTS = 3;
+
+const TX_BLOCKED_MESSAGE =
+  "Transaction blocked: too many transactions in a short period. Please wait a few minutes.";
 
 export interface Transaction {
   id: string;
@@ -21,6 +28,17 @@ const accounts = new Map<string, number>();
 const ledger: Transaction[] = [];
 let txCounter = 0;
 
+export interface PendingTransaction {
+  senderId: string;
+  receiverId: string;
+  amount: number;
+  groupId: string;
+  pinAttempts: number;
+  initiatedAt: string;
+}
+
+const pendingTransfers = new Map<string, PendingTransaction>();
+
 export function getBalance(userId: string): number {
   if (!accounts.has(userId)) {
     accounts.set(userId, DEFAULT_BALANCE);
@@ -32,6 +50,9 @@ export function resetAccounts(): void {
   accounts.clear();
   ledger.length = 0;
   txCounter = 0;
+  pendingTransfers.clear();
+  resetFraudState();
+  resetPinStore();
 }
 
 const checkBalanceSchema = z.object({
@@ -44,6 +65,11 @@ export async function checkBalance(
   const { userId } = checkBalanceSchema.parse(params);
   const balance = getBalance(userId);
   logger.info({ userId, balance }, "Balance checked");
+  logEvent("transaction", userId, {
+    action: "balance_check",
+    balance,
+    status: "success",
+  });
   return `Account ${userId} has a balance of ${spokenRupees(balance)}.`;
 }
 
@@ -51,13 +77,26 @@ const sendMoneySchema = z.object({
   senderId: z.string().min(1, "senderId is required"),
   receiverId: z.string().min(1, "receiverId is required"),
   amount: z.number().positive("Amount must be greater than zero"),
+  groupId: z.string().min(1).optional(),
 });
 
-export async function sendMoney(
-  params: Record<string, unknown>,
-): Promise<string> {
-  const { senderId, receiverId, amount } = sendMoneySchema.parse(params);
+const confirmSendMoneySchema = z.object({
+  senderId: z.string().min(1, "senderId is required"),
+  pin: z.string(),
+});
 
+function assertVelocityAllowed(senderId: string): void {
+  const velocity = checkVelocity(senderId);
+  if (!velocity.allowed) {
+    throw new Error(velocity.reason ?? TX_BLOCKED_MESSAGE);
+  }
+}
+
+function assertCanTransfer(
+  senderId: string,
+  receiverId: string,
+  amount: number,
+): void {
   if (senderId === receiverId) {
     throw new Error("Cannot transfer to the same account");
   }
@@ -68,6 +107,20 @@ export async function sendMoney(
       `Insufficient funds: ${senderId} has ${spokenRupees(senderBalance)} but tried to send ${spokenRupees(amount)}`,
     );
   }
+}
+
+async function executeTransfer(
+  transfer: {
+    senderId: string;
+    receiverId: string;
+    amount: number;
+    groupId?: string;
+  },
+): Promise<string> {
+  const { senderId, receiverId, amount, groupId } = transfer;
+  assertCanTransfer(senderId, receiverId, amount);
+
+  const senderBalance = getBalance(senderId);
 
   accounts.set(senderId, senderBalance - amount);
   accounts.set(receiverId, getBalance(receiverId) + amount);
@@ -81,6 +134,16 @@ export async function sendMoney(
     timestamp: new Date().toISOString(),
   };
   ledger.push(tx);
+  recordTransaction(senderId);
+  logEvent("transaction", senderId, {
+    action: "transfer",
+    status: "success",
+    txId: tx.id,
+    senderId,
+    receiverId,
+    amount,
+    groupId: groupId ?? "default",
+  });
 
   logger.info(
     { txId: tx.id, senderId, receiverId, amount },
@@ -88,16 +151,118 @@ export async function sendMoney(
   );
 
   const memoryText = `Sent ${spokenRupees(amount)} from ${senderId} to ${receiverId} on ${tx.timestamp}. Transaction ID: ${tx.id}.`;
-  upsertMemory(senderId, memoryText, { category: "transaction", txId: tx.id }).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for sender");
-  });
-  upsertMemory(receiverId, memoryText, { category: "transaction", txId: tx.id }).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for receiver");
-  });
+  upsertMemory(senderId, memoryText, { category: "transaction", txId: tx.id }, groupId).catch(
+    (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      logger.error(
+        { txId: tx.id, error: msg },
+        "Failed to store transaction memory for sender",
+      );
+    },
+  );
+  upsertMemory(receiverId, memoryText, { category: "transaction", txId: tx.id }, groupId).catch(
+    (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      logger.error(
+        { txId: tx.id, error: msg },
+        "Failed to store transaction memory for receiver",
+      );
+    },
+  );
 
   return `Successfully sent ${spokenRupees(amount)} from ${senderId} to ${receiverId}. New balance for ${senderId} is ${spokenRupees(getBalance(senderId))}.`;
+}
+
+export async function sendMoney(
+  params: Record<string, unknown>,
+): Promise<string> {
+  const transfer = sendMoneySchema.parse(params);
+  assertVelocityAllowed(transfer.senderId);
+  return executeTransfer(transfer);
+}
+
+export async function initiateSendMoney(
+  params: Record<string, unknown>,
+): Promise<string> {
+  const { senderId, receiverId, amount, groupId } = sendMoneySchema.parse(params);
+  assertVelocityAllowed(senderId);
+  assertCanTransfer(senderId, receiverId, amount);
+
+  if (pendingTransfers.has(senderId)) {
+    throw new Error(
+      "A transfer is already pending PIN confirmation for this user.",
+    );
+  }
+
+  pendingTransfers.set(senderId, {
+    senderId,
+    receiverId,
+    amount,
+    groupId: groupId ?? "default",
+    pinAttempts: 0,
+    initiatedAt: new Date().toISOString(),
+  });
+  logEvent("transaction", senderId, {
+    action: "transfer_initiated",
+    status: "pending",
+    receiverId,
+    amount,
+    groupId: groupId ?? "default",
+  });
+
+  return `Transfer of ${spokenRupees(amount)} to ${receiverId} is ready. Please say your 4-digit PIN to confirm.`;
+}
+
+export async function confirmSendMoney(
+  params: Record<string, unknown>,
+): Promise<string> {
+  const { senderId, pin } = confirmSendMoneySchema.parse(params);
+  const pending = pendingTransfers.get(senderId);
+
+  if (!pending) {
+    logEvent("transaction", senderId, {
+      action: "transfer_confirm",
+      status: "failed",
+      reason: "no_pending_transfer",
+    });
+    throw new Error("No pending transfer found. Please initiate sendMoney first.");
+  }
+
+  const verified = verifyPin(senderId, pin);
+  if (!verified) {
+    pending.pinAttempts += 1;
+    const remainingAttempts = MAX_PIN_ATTEMPTS - pending.pinAttempts;
+
+    if (remainingAttempts <= 0) {
+      pendingTransfers.delete(senderId);
+      logEvent("transaction", senderId, {
+        action: "transfer_confirm",
+        status: "failed",
+        reason: "max_pin_attempts_reached",
+      });
+      throw new Error(
+        "Incorrect PIN. Maximum attempts reached. Pending transfer has been cancelled.",
+      );
+    }
+
+    const attemptWord = remainingAttempts === 1 ? "attempt" : "attempts";
+    throw new Error(
+      `Incorrect PIN. ${remainingAttempts} ${attemptWord} remaining.`,
+    );
+  }
+
+  const result = await executeTransfer({
+    senderId: pending.senderId,
+    receiverId: pending.receiverId,
+    amount: pending.amount,
+    groupId: pending.groupId,
+  });
+  pendingTransfers.delete(senderId);
+  return result;
+}
+
+export function resetPendingTransfers(): void {
+  pendingTransfers.clear();
 }
 
 const getTransactionHistorySchema = z.object({

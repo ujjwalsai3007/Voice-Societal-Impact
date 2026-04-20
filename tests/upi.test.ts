@@ -179,7 +179,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
 
     it("should respect the limit parameter", async () => {
       await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 100 });
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 200 });
+      await sendMoney({ senderId: "user-b", receiverId: "user-a", amount: 200 });
       await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 300 });
 
       const result = await getTransactionHistory({ userId: "user-a", limit: 1 });

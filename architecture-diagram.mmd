@@ -1,0 +1,20 @@
+flowchart LR
+    A["User Voice"] --> B["Vapi Assistant"]
+    B --> C["Hono Webhook Router\n(src/webhooks/router.ts)"]
+    C --> D["Tool Dispatcher\n(src/webhooks/dispatcher.ts)"]
+
+    D --> E["UPI Service\n(src/services/upi.ts)"]
+    E --> F["Fraud Service\n(src/services/fraud.ts)"]
+    E --> G["PIN Service\n(src/services/pin.ts)"]
+    E --> H["Memory Service\n(src/services/memory.ts)"]
+
+    H --> I["Qdrant\n(userId + group_id filters)"]
+
+    D --> J["Event Store\n(src/services/event-store.ts)"]
+    E --> J
+    F --> J
+    G --> J
+    H --> J
+
+    K["Next.js Dashboard\n(/dashboard)"] --> L["REST API Layer\n/api/events\n/api/transactions\n/api/fraud-alerts\n/api/stats"]
+    L --> J

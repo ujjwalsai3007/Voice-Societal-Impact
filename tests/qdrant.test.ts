@@ -4,6 +4,7 @@ vi.mock("@qdrant/js-client-rest", () => {
   class MockQdrantClient {
     collectionExists = vi.fn().mockResolvedValue({ exists: false });
     createCollection = vi.fn().mockResolvedValue(true);
+    createPayloadIndex = vi.fn().mockResolvedValue(true);
     getCollections = vi.fn().mockResolvedValue({ collections: [] });
     constructor(public opts: Record<string, unknown>) {}
   }
@@ -129,6 +130,17 @@ describe("Qdrant Service (src/services/qdrant.ts)", () => {
           size: 384,
           distance: "Cosine",
         },
+      });
+      expect(client.createPayloadIndex).toHaveBeenCalledTimes(2);
+      expect(client.createPayloadIndex).toHaveBeenNthCalledWith(1, "user_memory", {
+        field_name: "userId",
+        field_schema: "keyword",
+        wait: true,
+      });
+      expect(client.createPayloadIndex).toHaveBeenNthCalledWith(2, "user_memory", {
+        field_name: "group_id",
+        field_schema: "keyword",
+        wait: true,
       });
     });
 

@@ -73,7 +73,7 @@ describe("End-to-End Webhook Cycle", () => {
   });
 
   it("should handle a full sendMoney flow and update balances", async () => {
-    const body = JSON.stringify({
+    const initiateBody = JSON.stringify({
       message: {
         type: "tool-calls",
         call: { id: "call-e2e-2" },
@@ -89,21 +89,52 @@ describe("End-to-End Webhook Cycle", () => {
       },
     });
 
-    const signature = signPayload(body, TEST_SECRET);
-    const res = await app.request("/webhook/vapi", {
+    const initiateSignature = signPayload(initiateBody, TEST_SECRET);
+    const initiateRes = await app.request("/webhook/vapi", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-vapi-signature": signature,
+        "x-vapi-signature": initiateSignature,
       },
-      body,
+      body: initiateBody,
     });
 
-    expect(res.status).toBe(200);
-    const json = (await res.json()) as { results: Array<{ toolCallId: string; result?: string; error?: string }> };
-    expect(json.results[0]!.result).toContain("2,500 rupees");
-    expect(json.results[0]!.result).toContain("alice");
-    expect(json.results[0]!.result).toContain("bob");
+    expect(initiateRes.status).toBe(200);
+    const initiateJson = (await initiateRes.json()) as { results: Array<{ toolCallId: string; result?: string; error?: string }> };
+    expect(initiateJson.results[0]!.result).toContain("2,500 rupees");
+    expect(initiateJson.results[0]!.result).toContain("bob");
+    expect(initiateJson.results[0]!.result).toContain("4-digit PIN");
+
+    const confirmBody = JSON.stringify({
+      message: {
+        type: "tool-calls",
+        call: { id: "call-e2e-2b" },
+        toolWithToolCallList: [
+          {
+            name: "confirmSendMoney",
+            toolCall: {
+              id: "tc-e2e-confirm",
+              parameters: { senderId: "alice", pin: "1234" },
+            },
+          },
+        ],
+      },
+    });
+    const confirmSignature = signPayload(confirmBody, TEST_SECRET);
+    const confirmRes = await app.request("/webhook/vapi", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vapi-signature": confirmSignature,
+      },
+      body: confirmBody,
+    });
+
+    expect(confirmRes.status).toBe(200);
+    const confirmJson = (await confirmRes.json()) as { results: Array<{ toolCallId: string; result?: string; error?: string }> };
+    expect(confirmJson.results[0]!.result).toContain("2,500 rupees");
+    expect(confirmJson.results[0]!.result).toContain("alice");
+    expect(confirmJson.results[0]!.result).toContain("bob");
 
     expect(getBalance("alice")).toBe(7500);
     expect(getBalance("bob")).toBe(12500);
@@ -134,6 +165,31 @@ describe("End-to-End Webhook Cycle", () => {
         "x-vapi-signature": sendSig,
       },
       body: sendBody,
+    });
+
+    const confirmBody = JSON.stringify({
+      message: {
+        type: "tool-calls",
+        call: { id: "call-e2e-3a-confirm" },
+        toolWithToolCallList: [
+          {
+            name: "confirmSendMoney",
+            toolCall: {
+              id: "tc-e2e-send-confirm",
+              parameters: { senderId: "charlie", pin: "1234" },
+            },
+          },
+        ],
+      },
+    });
+    const confirmSig = signPayload(confirmBody, TEST_SECRET);
+    await app.request("/webhook/vapi", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vapi-signature": confirmSig,
+      },
+      body: confirmBody,
     });
 
     const historyBody = JSON.stringify({

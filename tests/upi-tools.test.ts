@@ -9,11 +9,12 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
     resetAccounts();
   });
 
-  it("should register checkBalance, sendMoney, and getTransactionHistory tools", () => {
+  it("should register checkBalance, sendMoney, confirmSendMoney, and getTransactionHistory tools", () => {
     registerUpiTools();
     const tools = getRegisteredTools();
     expect(tools).toContain("checkBalance");
     expect(tools).toContain("sendMoney");
+    expect(tools).toContain("confirmSendMoney");
     expect(tools).toContain("getTransactionHistory");
   });
 
@@ -54,9 +55,9 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]!.toolCallId).toBe("tc-sm-1");
-      expect(results[0]!.result).toContain("1,000 rupees");
-      expect(results[0]!.result).toContain("user-a");
+      expect(results[0]!.result).toContain("Transfer of 1,000 rupees");
       expect(results[0]!.result).toContain("user-b");
+      expect(results[0]!.result).toContain("4-digit PIN");
       expect(results[0]!.error).toBeUndefined();
     });
 
@@ -67,6 +68,15 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
           toolCall: {
             id: "tc-sm-2",
             parameters: { senderId: "user-a", receiverId: "user-b", amount: 500 },
+          },
+        },
+      ]);
+      await dispatchToolCalls([
+        {
+          name: "confirmSendMoney",
+          toolCall: {
+            id: "tc-sm-2-confirm",
+            parameters: { senderId: "user-a", pin: "1234" },
           },
         },
       ]);
