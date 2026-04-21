@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-heading);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-heading);
+}
+
+:root {
+  --background: #040912;
+  --foreground: #f5f8ff;
+  --card: #0b1322;
+  --card-foreground: #e6eefc;
+  --muted: #131f35;
+  --muted-foreground: #90a2c9;
+  --primary: #1fd1a5;
+  --primary-foreground: #001810;
+  --destructive: #f87171;
+  --border: rgba(148, 163, 184, 0.28);
+  --ring: rgba(31, 209, 165, 0.55);
+}
+
+* {
+  @apply border-border;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: var(--font-heading), sans-serif;
+}
+
+.font-mono {
+  font-family: var(--font-mono), monospace;
+}
