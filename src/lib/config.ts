@@ -11,7 +11,7 @@ const configSchema = z.object({
       }
       return parsed;
     })
-    .default("3000"),
+    .default(3000),
   qdrantUrl: z.string().min(1, "QDRANT_URL is required"),
   qdrantApiKey: z.string().default(""),
   vapiSecret: z.string().min(1, "VAPI_SECRET is required"),

@@ -62,6 +62,7 @@ export async function ensureCollection(
   }
 
   await ensurePayloadIndex(qdrant, name, "userId", "keyword");
+  await ensurePayloadIndex(qdrant, name, "group_id", "keyword");
 }
 
 async function ensurePayloadIndex(

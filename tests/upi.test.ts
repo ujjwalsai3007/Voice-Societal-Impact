@@ -5,13 +5,32 @@ import {
   sendMoney,
   getTransactionHistory,
   resetAccounts,
-  type Transaction,
+  HIGH_VALUE_TRANSFER_THRESHOLD,
 } from "../src/services/upi.js";
+import { setPin } from "../src/services/pin.js";
 
 describe("UPI Transaction Engine (src/services/upi.ts)", () => {
   beforeEach(() => {
     resetAccounts();
   });
+
+  async function sendMoneySecure(
+    senderId: string,
+    receiverId: string,
+    amount: number,
+    pin = "1234",
+  ): Promise<string> {
+    setPin(senderId, pin);
+    return sendMoney({
+      senderId,
+      receiverId,
+      amount,
+      pin,
+      ...(amount >= HIGH_VALUE_TRANSFER_THRESHOLD
+        ? { amountConfirmation: amount }
+        : {}),
+    });
+  }
 
   describe("getBalance", () => {
     it("should return default balance of 10000 for a new user", () => {
@@ -49,11 +68,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should reflect updated balance after a transaction", async () => {
-      await sendMoney({
-        senderId: "user-abc",
-        receiverId: "user-xyz",
-        amount: 500,
-      });
+      await sendMoneySecure("user-abc", "user-xyz", 500);
       const result = await checkBalance({ userId: "user-abc" });
       expect(result).toContain("9,500 rupees");
     });
@@ -61,11 +76,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
 
   describe("sendMoney", () => {
     it("should transfer money between two users", async () => {
-      const result = await sendMoney({
-        senderId: "user-a",
-        receiverId: "user-b",
-        amount: 2000,
-      });
+      const result = await sendMoneySecure("user-a", "user-b", 2000);
 
       expect(result).toContain("2,000 rupees");
       expect(result).toContain("user-a");
@@ -76,41 +87,50 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should reject transfer when sender has insufficient funds", async () => {
+      setPin("user-a", "1234");
       await expect(
         sendMoney({
           senderId: "user-a",
           receiverId: "user-b",
           amount: 99999,
+          pin: "1234",
+          amountConfirmation: 99999,
         }),
       ).rejects.toThrow(/insufficient/i);
     });
 
     it("should reject transfer with zero amount", async () => {
+      setPin("user-a", "1234");
       await expect(
         sendMoney({
           senderId: "user-a",
           receiverId: "user-b",
           amount: 0,
+          pin: "1234",
         }),
       ).rejects.toThrow();
     });
 
     it("should reject transfer with negative amount", async () => {
+      setPin("user-a", "1234");
       await expect(
         sendMoney({
           senderId: "user-a",
           receiverId: "user-b",
           amount: -100,
+          pin: "1234",
         }),
       ).rejects.toThrow();
     });
 
     it("should reject transfer to self", async () => {
+      setPin("user-a", "1234");
       await expect(
         sendMoney({
           senderId: "user-a",
           receiverId: "user-a",
           amount: 100,
+          pin: "1234",
         }),
       ).rejects.toThrow(/same/i);
     });
@@ -134,9 +154,9 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should handle multiple sequential transactions correctly", async () => {
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 1000 });
-      await sendMoney({ senderId: "user-b", receiverId: "user-a", amount: 500 });
-      await sendMoney({ senderId: "user-a", receiverId: "user-c", amount: 200 });
+      await sendMoneySecure("user-a", "user-b", 1000);
+      await sendMoneySecure("user-b", "user-a", 500);
+      await sendMoneySecure("user-a", "user-c", 200);
 
       expect(getBalance("user-a")).toBe(9300);
       expect(getBalance("user-b")).toBe(10500);
@@ -144,11 +164,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should handle exact balance transfer (balance goes to zero)", async () => {
-      const result = await sendMoney({
-        senderId: "user-a",
-        receiverId: "user-b",
-        amount: 10000,
-      });
+      const result = await sendMoneySecure("user-a", "user-b", 10000);
       expect(result).toContain("10,000 rupees");
       expect(getBalance("user-a")).toBe(0);
       expect(getBalance("user-b")).toBe(20000);
@@ -162,15 +178,15 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should return transaction details after a send", async () => {
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 500 });
+      await sendMoneySecure("user-a", "user-b", 500);
       const result = await getTransactionHistory({ userId: "user-a" });
       expect(result).toContain("500");
       expect(result).toContain("user-b");
     });
 
     it("should show both sent and received transactions", async () => {
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 300 });
-      await sendMoney({ senderId: "user-c", receiverId: "user-a", amount: 700 });
+      await sendMoneySecure("user-a", "user-b", 300);
+      await sendMoneySecure("user-c", "user-a", 700);
 
       const result = await getTransactionHistory({ userId: "user-a" });
       expect(result).toContain("300");
@@ -178,9 +194,9 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should respect the limit parameter", async () => {
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 100 });
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 200 });
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 300 });
+      await sendMoneySecure("user-a", "user-b", 100);
+      await sendMoneySecure("user-b", "user-a", 200);
+      await sendMoneySecure("user-a", "user-b", 300);
 
       const result = await getTransactionHistory({ userId: "user-a", limit: 1 });
       expect(result).toContain("300");
@@ -206,7 +222,7 @@ describe("UPI Transaction Engine (src/services/upi.ts)", () => {
     });
 
     it("should clear transaction history", async () => {
-      await sendMoney({ senderId: "user-a", receiverId: "user-b", amount: 500 });
+      await sendMoneySecure("user-a", "user-b", 500);
       resetAccounts();
       const result = await getTransactionHistory({ userId: "user-a" });
       expect(result).toContain("no transactions");

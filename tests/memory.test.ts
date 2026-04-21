@@ -10,6 +10,7 @@ function createMockQdrantClient(): QdrantClient {
         score: 0.95,
         payload: {
           userId: "user-abc",
+          group_id: "default",
           text: "Sent Rs 500 to Ramesh",
           category: "transaction",
           timestamp: "2026-04-12T10:00:00.000Z",
@@ -20,6 +21,7 @@ function createMockQdrantClient(): QdrantClient {
         score: 0.82,
         payload: {
           userId: "user-abc",
+          group_id: "default",
           text: "Checked balance",
           category: "query",
           timestamp: "2026-04-12T09:30:00.000Z",
@@ -32,6 +34,7 @@ function createMockQdrantClient(): QdrantClient {
           id: "point-3",
           payload: {
             userId: "user-abc",
+            group_id: "default",
             text: "Previous interaction",
             category: "general",
             timestamp: "2026-04-12T08:00:00.000Z",
@@ -98,6 +101,7 @@ describe("Memory Service (src/services/memory.ts)", () => {
       const point = args.points[0]!;
       expect(point.vector).toHaveLength(384);
       expect(point.payload["userId"]).toBe("user-abc");
+      expect(point.payload["group_id"]).toBe("default");
       expect(point.payload["text"]).toBe("Sent Rs 500 to Ramesh");
       expect(point.payload["category"]).toBe("transaction");
       expect(point.payload["timestamp"]).toBeDefined();
@@ -134,8 +138,20 @@ describe("Memory Service (src/services/memory.ts)", () => {
       const args = call[1] as { points: Array<{ payload: Record<string, unknown> }> };
       const payload = args.points[0]!.payload;
       expect(payload["userId"]).toBe("user-xyz");
+      expect(payload["group_id"]).toBe("default");
       expect(payload["text"]).toBe("just a note");
       expect(payload["timestamp"]).toBeDefined();
+    });
+
+    it("should include custom group_id when provided", async () => {
+      const { upsertMemory } = await import("../src/services/memory.js");
+
+      await upsertMemory("user-xyz", "tenant note", { category: "note" }, "tenant-a");
+
+      const call = vi.mocked(mockClient.upsert).mock.calls[0]!;
+      const args = call[1] as { points: Array<{ payload: Record<string, unknown> }> };
+      const payload = args.points[0]!.payload;
+      expect(payload["group_id"]).toBe("tenant-a");
     });
   });
 
@@ -163,6 +179,10 @@ describe("Memory Service (src/services/memory.ts)", () => {
           key: "userId",
           match: { value: "user-abc" },
         },
+        {
+          key: "group_id",
+          match: { value: "default" },
+        },
       ]);
     });
 
@@ -176,6 +196,7 @@ describe("Memory Service (src/services/memory.ts)", () => {
         score: 0.95,
         metadata: {
           userId: "user-abc",
+          group_id: "default",
           text: "Sent Rs 500 to Ramesh",
           category: "transaction",
           timestamp: "2026-04-12T10:00:00.000Z",
@@ -199,6 +220,20 @@ describe("Memory Service (src/services/memory.ts)", () => {
 
       const results = await recallMemory("user-none", "nothing");
       expect(results).toEqual([]);
+    });
+
+    it("should apply tenant filter for custom groupId", async () => {
+      const { recallMemory } = await import("../src/services/memory.js");
+      await recallMemory("user-abc", "ramesh", 3, "tenant-b");
+
+      const call = vi.mocked(mockClient.search).mock.calls[0]!;
+      const args = call[1] as {
+        filter: { must: Array<{ key: string; match: { value: string } }> };
+      };
+      expect(args.filter.must).toEqual([
+        { key: "userId", match: { value: "user-abc" } },
+        { key: "group_id", match: { value: "tenant-b" } },
+      ]);
     });
   });
 
@@ -227,6 +262,7 @@ describe("Memory Service (src/services/memory.ts)", () => {
       expect(args.with_payload).toBe(true);
       expect(args.filter.must).toEqual([
         { key: "userId", match: { value: "user-abc" } },
+        { key: "group_id", match: { value: "default" } },
       ]);
 
       expect(results).toHaveLength(1);
