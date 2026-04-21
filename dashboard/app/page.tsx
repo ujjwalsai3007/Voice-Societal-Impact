@@ -11,6 +11,11 @@ const EMPTY_STATS: StatsResponse = {
   blockedCount: 0,
   activeUsers: 0,
   totalVolume: 0,
+  transferInitiatedCount: 0,
+  pinVerifiedCount: 0,
+  pinFailedCount: 0,
+  highValueChallengeCount: 0,
+  highValueConfirmedCount: 0,
 };
 
 export default function HomePage() {
@@ -74,7 +79,7 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <article className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Total Transactions</p>
           <p className="mt-3 font-heading text-3xl text-white">{stats.totalTransactions}</p>
@@ -90,6 +95,26 @@ export default function HomePage() {
         <article className="rounded-xl border border-indigo-400/30 bg-indigo-500/10 p-4">
           <p className="text-xs uppercase tracking-[0.2em] text-indigo-100">Total Volume</p>
           <p className="mt-3 font-heading text-3xl text-white">{formatCurrency(stats.totalVolume)}</p>
+        </article>
+        <article className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-amber-100">Initiated Transfers</p>
+          <p className="mt-3 font-heading text-3xl text-white">{stats.transferInitiatedCount}</p>
+        </article>
+        <article className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-sky-100">PIN Verified</p>
+          <p className="mt-3 font-heading text-3xl text-white">{stats.pinVerifiedCount}</p>
+        </article>
+        <article className="rounded-xl border border-orange-400/30 bg-orange-500/10 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-orange-100">PIN Failed</p>
+          <p className="mt-3 font-heading text-3xl text-white">{stats.pinFailedCount}</p>
+        </article>
+        <article className="rounded-xl border border-yellow-400/30 bg-yellow-500/10 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-yellow-100">High-Value Challenges</p>
+          <p className="mt-3 font-heading text-3xl text-white">{stats.highValueChallengeCount}</p>
+        </article>
+        <article className="rounded-xl border border-teal-400/30 bg-teal-500/10 p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-teal-100">High-Value Confirmed</p>
+          <p className="mt-3 font-heading text-3xl text-white">{stats.highValueConfirmedCount}</p>
         </article>
       </section>
 

@@ -18,4 +18,9 @@ export interface StatsResponse {
   blockedCount: number;
   activeUsers: number;
   totalVolume: number;
+  transferInitiatedCount: number;
+  pinVerifiedCount: number;
+  pinFailedCount: number;
+  highValueChallengeCount: number;
+  highValueConfirmedCount: number;
 }

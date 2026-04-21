@@ -54,12 +54,43 @@ export function getStats(): {
   blockedCount: number;
   activeUsers: number;
   totalVolume: number;
+  transferInitiatedCount: number;
+  pinVerifiedCount: number;
+  pinFailedCount: number;
+  highValueChallengeCount: number;
+  highValueConfirmedCount: number;
 } {
   const txEvents = getTransactions().filter(
     (event) =>
       event.details["action"] === "transfer" &&
       event.details["status"] === "success",
   );
+  const initiatedEvents = getTransactions().filter(
+    (event) =>
+      event.details["action"] === "transfer_initiated" &&
+      event.details["status"] === "pending",
+  );
+  const highValueChallengeEvents = getTransactions().filter(
+    (event) =>
+      event.details["action"] === "transfer_confirm" &&
+      event.details["reason"] === "high_value_amount_mismatch",
+  );
+  const highValueConfirmedEvents = getTransactions().filter(
+    (event) =>
+      event.details["action"] === "transfer_high_value_confirmed" &&
+      event.details["status"] === "success",
+  );
+
+  const pinEvents = getEvents().filter(
+    (event) => event.type === "pin_verification",
+  );
+  const pinVerifiedEvents = pinEvents.filter(
+    (event) => event.details["status"] === "verified",
+  );
+  const pinFailedEvents = pinEvents.filter((event) => {
+    const status = event.details["status"];
+    return status === "failed" || status === "invalid_format";
+  });
 
   const activeUsers = new Set(
     events.map((event) => event.userId).filter((userId) => userId.length > 0),
@@ -75,6 +106,11 @@ export function getStats(): {
     blockedCount: getFraudAlerts().length,
     activeUsers: activeUsers.size,
     totalVolume,
+    transferInitiatedCount: initiatedEvents.length,
+    pinVerifiedCount: pinVerifiedEvents.length,
+    pinFailedCount: pinFailedEvents.length,
+    highValueChallengeCount: highValueChallengeEvents.length,
+    highValueConfirmedCount: highValueConfirmedEvents.length,
   };
 }
 

@@ -9,12 +9,15 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
     resetAccounts();
   });
 
-  it("should register checkBalance, sendMoney, confirmSendMoney, and getTransactionHistory tools", () => {
+  it("should register payment, PIN, and history tools", () => {
     registerUpiTools();
     const tools = getRegisteredTools();
     expect(tools).toContain("checkBalance");
     expect(tools).toContain("sendMoney");
     expect(tools).toContain("confirmSendMoney");
+    expect(tools).toContain("setPin");
+    expect(tools).toContain("changePin");
+    expect(tools).toContain("checkPinStatus");
     expect(tools).toContain("getTransactionHistory");
   });
 
@@ -43,6 +46,16 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
     });
 
     it("should dispatch sendMoney via the tool pipeline", async () => {
+      await dispatchToolCalls([
+        {
+          name: "setPin",
+          toolCall: {
+            id: "tc-pin-1",
+            parameters: { userId: "user-a", pin: "1234" },
+          },
+        },
+      ]);
+
       const results = await dispatchToolCalls([
         {
           name: "sendMoney",
@@ -62,6 +75,16 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
     });
 
     it("should dispatch getTransactionHistory via the tool pipeline", async () => {
+      await dispatchToolCalls([
+        {
+          name: "setPin",
+          toolCall: {
+            id: "tc-pin-2",
+            parameters: { userId: "user-a", pin: "1234" },
+          },
+        },
+      ]);
+
       await dispatchToolCalls([
         {
           name: "sendMoney",
@@ -94,7 +117,45 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
       expect(results[0]!.error).toBeUndefined();
     });
 
+    it("should update PIN through setPin and changePin tools", async () => {
+      const setResults = await dispatchToolCalls([
+        {
+          name: "setPin",
+          toolCall: {
+            id: "tc-pin-set",
+            parameters: { userId: "user-a", pin: "1234" },
+          },
+        },
+      ]);
+      expect(setResults[0]!.result).toContain("PIN set successfully");
+
+      const changeResults = await dispatchToolCalls([
+        {
+          name: "changePin",
+          toolCall: {
+            id: "tc-pin-change",
+            parameters: {
+              userId: "user-a",
+              currentPin: "1234",
+              newPin: "9876",
+            },
+          },
+        },
+      ]);
+      expect(changeResults[0]!.result).toContain("PIN updated successfully");
+    });
+
     it("should return error for sendMoney with insufficient funds", async () => {
+      await dispatchToolCalls([
+        {
+          name: "setPin",
+          toolCall: {
+            id: "tc-pin-3",
+            parameters: { userId: "user-a", pin: "1234" },
+          },
+        },
+      ]);
+
       const results = await dispatchToolCalls([
         {
           name: "sendMoney",

@@ -7,6 +7,7 @@ import {
   VELOCITY_MAX_TXN,
 } from "../src/services/fraud.js";
 import { resetAccounts, sendMoney } from "../src/services/upi.js";
+import { setPin } from "../src/services/pin.js";
 
 describe("Fraud Velocity Checks (src/services/fraud.ts)", () => {
   beforeEach(() => {
@@ -52,15 +53,18 @@ describe("Fraud Velocity Checks (src/services/fraud.ts)", () => {
   });
 
   it("blocks through sendMoney when sender crosses velocity threshold", async () => {
+    setPin("fraud-sender", "1234");
     await sendMoney({
       senderId: "fraud-sender",
       receiverId: "fraud-receiver",
       amount: 100,
+      pin: "1234",
     });
     await sendMoney({
       senderId: "fraud-sender",
       receiverId: "fraud-receiver",
       amount: 100,
+      pin: "1234",
     });
 
     await expect(
@@ -68,6 +72,7 @@ describe("Fraud Velocity Checks (src/services/fraud.ts)", () => {
         senderId: "fraud-sender",
         receiverId: "fraud-receiver",
         amount: 100,
+        pin: "1234",
       }),
     ).rejects.toThrow(
       "Transaction blocked: too many transactions in a short period. Please wait a few minutes.",

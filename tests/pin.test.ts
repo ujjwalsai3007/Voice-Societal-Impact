@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   setPin,
+  changePin,
+  hasPin,
   verifyPin,
   resetPinStore,
+  NO_PIN_SET_ERROR,
 } from "../src/services/pin.js";
 import {
   confirmSendMoney,
   getBalance,
   initiateSendMoney,
+  HIGH_VALUE_CONFIRMATION_ERROR_PREFIX,
   resetAccounts,
 } from "../src/services/upi.js";
 
@@ -17,14 +21,29 @@ describe("PIN Service (src/services/pin.ts)", () => {
     resetAccounts();
   });
 
-  it("uses default PIN 1234 when user has no PIN yet", () => {
-    expect(verifyPin("pin-user-default", "1234")).toBe(true);
+  it("requires users to set a PIN before verification", () => {
+    expect(() => verifyPin("pin-user-default", "1234")).toThrow(NO_PIN_SET_ERROR);
   });
 
   it("supports setting and verifying a custom PIN", () => {
     setPin("pin-user-custom", "4321");
+    expect(hasPin("pin-user-custom")).toBe(true);
     expect(verifyPin("pin-user-custom", "4321")).toBe(true);
     expect(verifyPin("pin-user-custom", "1234")).toBe(false);
+  });
+
+  it("supports changing PIN with current PIN validation", () => {
+    setPin("pin-change-user", "2222");
+    changePin("pin-change-user", "2222", "8888");
+
+    expect(verifyPin("pin-change-user", "8888")).toBe(true);
+    expect(verifyPin("pin-change-user", "2222")).toBe(false);
+  });
+
+  it("rejects PIN change when no PIN exists", () => {
+    expect(() =>
+      changePin("pin-change-missing", "1111", "2222"),
+    ).toThrow(NO_PIN_SET_ERROR);
   });
 
   it("rejects invalid PIN format during setPin", () => {
@@ -38,7 +57,18 @@ describe("PIN Service (src/services/pin.ts)", () => {
   });
 
   describe("Two-step transfer flow", () => {
+    it("requires PIN setup before initiating transfer", async () => {
+      await expect(
+        initiateSendMoney({
+          senderId: "pin-missing-user",
+          receiverId: "pin-missing-receiver",
+          amount: 700,
+        }),
+      ).rejects.toThrow(NO_PIN_SET_ERROR);
+    });
+
     it("initiates and confirms transfer with correct PIN", async () => {
+      setPin("alice", "1234");
       const message = await initiateSendMoney({
         senderId: "alice",
         receiverId: "bob",
@@ -56,6 +86,7 @@ describe("PIN Service (src/services/pin.ts)", () => {
     });
 
     it("fails on wrong PIN and reports remaining attempts", async () => {
+      setPin("pin-attempt-user", "1234");
       await initiateSendMoney({
         senderId: "pin-attempt-user",
         receiverId: "pin-attempt-receiver",
@@ -71,6 +102,7 @@ describe("PIN Service (src/services/pin.ts)", () => {
     });
 
     it("cancels pending transfer after 3 wrong PIN attempts", async () => {
+      setPin("pin-lock-user", "1234");
       await initiateSendMoney({
         senderId: "pin-lock-user",
         receiverId: "pin-lock-receiver",
@@ -107,12 +139,38 @@ describe("PIN Service (src/services/pin.ts)", () => {
     });
 
     it("rejects confirmation when no pending transfer exists", async () => {
+      setPin("missing-pending-user", "1234");
       await expect(
         confirmSendMoney({
           senderId: "missing-pending-user",
           pin: "1234",
         }),
       ).rejects.toThrow("No pending transfer found. Please initiate sendMoney first.");
+    });
+
+    it("requires exact amount confirmation for high-value transfer", async () => {
+      setPin("high-value-user", "1234");
+      await initiateSendMoney({
+        senderId: "high-value-user",
+        receiverId: "high-value-receiver",
+        amount: 2500,
+      });
+
+      await expect(
+        confirmSendMoney({
+          senderId: "high-value-user",
+          pin: "1234",
+        }),
+      ).rejects.toThrow(HIGH_VALUE_CONFIRMATION_ERROR_PREFIX);
+
+      const confirmation = await confirmSendMoney({
+        senderId: "high-value-user",
+        pin: "1234",
+        amountConfirmation: 2500,
+      });
+      expect(confirmation).toContain("Successfully sent 2,500 rupees");
+      expect(getBalance("high-value-user")).toBe(7500);
+      expect(getBalance("high-value-receiver")).toBe(12500);
     });
   });
 });

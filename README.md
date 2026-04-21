@@ -7,7 +7,9 @@ Built for the Vapi x Qdrant Hackathon (Bangalore, April 2026).
 ## What’s New (Finals Upgrade)
 
 - Fraud velocity protection: blocks users after rapid consecutive transfers in a 5-minute window.
-- PIN 2FA flow: `sendMoney` now initiates transfer; `confirmSendMoney` completes it with a 4-digit PIN.
+- PIN ownership flow: users set and change PIN with dedicated tools; no default hardcoded PIN fallback.
+- PIN 2FA flow: `sendMoney` initiates transfer; `confirmSendMoney` completes it with a 4-digit PIN.
+- High-value guardrail: high-value transfers require exact amount confirmation in the PIN step.
 - Multi-tenant semantic memory: all Qdrant operations include `group_id` isolation.
 - Event telemetry layer: in-memory event store tracks tool calls, fraud alerts, transactions, PIN checks, and memory operations.
 - Ops dashboard: Next.js dark-themed monitoring UI for events, transactions, fraud, and stats.
@@ -45,9 +47,12 @@ flowchart LR
 
 | Tool | What it does |
 |------|-------------|
+| `setPin` | Sets a 4-digit PIN for a user account |
+| `changePin` | Changes PIN using current PIN verification |
+| `checkPinStatus` | Returns whether a user has configured a PIN |
 | `checkBalance` | Returns the user’s current account balance |
 | `sendMoney` | Initiates transfer and asks for 4-digit PIN confirmation |
-| `confirmSendMoney` | Confirms pending transfer after PIN verification |
+| `confirmSendMoney` | Confirms pending transfer after PIN verification; includes amount confirmation for high-value transfers |
 | `getTransactionHistory` | Lists recent sent and received transactions |
 | `recallContext` | Semantic recall over user history (Qdrant) |
 
@@ -60,7 +65,7 @@ flowchart LR
 - Validation: Zod
 - Logging: Pino
 - Dashboard: Next.js (App Router) + Tailwind + shadcn/ui + lucide-react
-- Tests: Vitest (18 files, 158 tests)
+- Tests: Vitest
 
 ## Backend Setup
 
@@ -115,11 +120,15 @@ npm run dev -- --port 3001
 ## Vapi Dashboard Configuration (Manual)
 
 1. Keep existing tools and webhook URL (`/webhook/vapi`).
-2. Add new tool: `confirmSendMoney` with parameters:
-- `senderId` (string)
-- `pin` (string)
+2. Add/ensure these tools exist with exact parameters:
+- `setPin`: `userId`, `pin`
+- `changePin`: `userId`, `currentPin`, `newPin`
+- `checkPinStatus`: `userId`
+- `confirmSendMoney`: `senderId`, `pin`, `amountConfirmation` (optional for normal transfers, required for high-value)
 3. Update prompt behavior:
+- If PIN is missing, ask user to set PIN first and call `setPin`.
 - After `sendMoney` returns PIN prompt text, ask user for PIN and call `confirmSendMoney`.
+- For high-value transfers, include exact `amountConfirmation` in `confirmSendMoney`.
 - If fraud block response appears, speak naturally:
   - “For your security, I’ve temporarily paused transactions. Please try again in a few minutes.”
 
@@ -137,7 +146,12 @@ npm run dev -- --port 3001
   "totalTransactions": 0,
   "blockedCount": 0,
   "activeUsers": 0,
-  "totalVolume": 0
+  "totalVolume": 0,
+  "transferInitiatedCount": 0,
+  "pinVerifiedCount": 0,
+  "pinFailedCount": 0,
+  "highValueChallengeCount": 0,
+  "highValueConfirmedCount": 0
 }
 ```
 
@@ -147,10 +161,12 @@ npm run dev -- --port 3001
 2. Open dashboard on one screen/tab (`/`, `/events`, `/fraud`).
 3. Start live Vapi call on another screen/tab.
 4. Say: “Check my balance” -> watch tool/event log update.
-5. Say: “Send 500 rupees to Ramesh” -> assistant asks for PIN.
-6. Give wrong PIN once -> observe PIN failure event.
-7. Give correct PIN -> transaction succeeds and stats update.
-8. Repeat transfers quickly to trigger fraud block -> show `/fraud` page highlighting blocked attempts.
+5. Say: “Set my PIN to 1234” -> assistant confirms PIN setup.
+6. Say: “Send 500 rupees to Ramesh” -> assistant asks for PIN.
+7. Give wrong PIN once -> observe PIN failure event.
+8. Give correct PIN -> transaction succeeds and stats update.
+9. Say: “Send 2500 rupees to Ramesh” -> assistant asks for PIN + amount confirmation; complete transfer.
+10. Repeat transfers quickly to trigger fraud block -> show `/fraud` page highlighting blocked attempts.
 
 ## Tests
 

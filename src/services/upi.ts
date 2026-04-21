@@ -2,11 +2,19 @@ import { z } from "zod/v4";
 import { logger } from "../lib/logger.js";
 import { upsertMemory } from "./memory.js";
 import { checkVelocity, recordTransaction, resetFraudState } from "./fraud.js";
-import { verifyPin, resetPinStore } from "./pin.js";
+import {
+  verifyPin,
+  resetPinStore,
+  hasPin,
+  NO_PIN_SET_ERROR,
+} from "./pin.js";
 import { logEvent } from "./event-store.js";
 
 const DEFAULT_BALANCE = 10000;
 const MAX_PIN_ATTEMPTS = 3;
+export const HIGH_VALUE_TRANSFER_THRESHOLD = 2000;
+export const HIGH_VALUE_CONFIRMATION_ERROR_PREFIX =
+  "High-value transfer verification failed.";
 
 const TX_BLOCKED_MESSAGE =
   "Transaction blocked: too many transactions in a short period. Please wait a few minutes.";
@@ -34,6 +42,7 @@ export interface PendingTransaction {
   amount: number;
   groupId: string;
   pinAttempts: number;
+  requiresAmountConfirmation: boolean;
   initiatedAt: string;
 }
 
@@ -73,16 +82,24 @@ export async function checkBalance(
   return `Account ${userId} has a balance of ${spokenRupees(balance)}.`;
 }
 
-const sendMoneySchema = z.object({
+const transferBaseSchema = z.object({
   senderId: z.string().min(1, "senderId is required"),
   receiverId: z.string().min(1, "receiverId is required"),
   amount: z.number().positive("Amount must be greater than zero"),
   groupId: z.string().min(1).optional(),
 });
 
+const sendMoneySchema = transferBaseSchema.extend({
+  pin: z.string(),
+  amountConfirmation: z.number().positive().optional(),
+});
+
+const initiateSendMoneySchema = transferBaseSchema;
+
 const confirmSendMoneySchema = z.object({
   senderId: z.string().min(1, "senderId is required"),
   pin: z.string(),
+  amountConfirmation: z.number().positive().optional(),
 });
 
 function assertVelocityAllowed(senderId: string): void {
@@ -105,6 +122,25 @@ function assertCanTransfer(
   if (senderBalance < amount) {
     throw new Error(
       `Insufficient funds: ${senderId} has ${spokenRupees(senderBalance)} but tried to send ${spokenRupees(amount)}`,
+    );
+  }
+}
+
+function requiresHighValueConfirmation(amount: number): boolean {
+  return amount >= HIGH_VALUE_TRANSFER_THRESHOLD;
+}
+
+function assertHighValueAmountConfirmation(
+  amount: number,
+  amountConfirmation: number | undefined,
+): void {
+  if (!requiresHighValueConfirmation(amount)) {
+    return;
+  }
+
+  if (amountConfirmation !== amount) {
+    throw new Error(
+      `${HIGH_VALUE_CONFIRMATION_ERROR_PREFIX} Please confirm the exact amount of ${spokenRupees(amount)} along with your PIN.`,
     );
   }
 }
@@ -177,14 +213,39 @@ export async function sendMoney(
   params: Record<string, unknown>,
 ): Promise<string> {
   const transfer = sendMoneySchema.parse(params);
+  if (!hasPin(transfer.senderId)) {
+    throw new Error(NO_PIN_SET_ERROR);
+  }
+
+  assertHighValueAmountConfirmation(transfer.amount, transfer.amountConfirmation);
   assertVelocityAllowed(transfer.senderId);
+
+  const verified = verifyPin(transfer.senderId, transfer.pin);
+  if (!verified) {
+    throw new Error("Incorrect PIN.");
+  }
+
   return executeTransfer(transfer);
 }
 
 export async function initiateSendMoney(
   params: Record<string, unknown>,
 ): Promise<string> {
-  const { senderId, receiverId, amount, groupId } = sendMoneySchema.parse(params);
+  const { senderId, receiverId, amount, groupId } =
+    initiateSendMoneySchema.parse(params);
+
+  if (!hasPin(senderId)) {
+    logEvent("transaction", senderId, {
+      action: "transfer_initiated",
+      status: "failed",
+      reason: "pin_not_set",
+      receiverId,
+      amount,
+      groupId: groupId ?? "default",
+    });
+    throw new Error(NO_PIN_SET_ERROR);
+  }
+
   assertVelocityAllowed(senderId);
   assertCanTransfer(senderId, receiverId, amount);
 
@@ -200,6 +261,7 @@ export async function initiateSendMoney(
     amount,
     groupId: groupId ?? "default",
     pinAttempts: 0,
+    requiresAmountConfirmation: requiresHighValueConfirmation(amount),
     initiatedAt: new Date().toISOString(),
   });
   logEvent("transaction", senderId, {
@@ -210,13 +272,17 @@ export async function initiateSendMoney(
     groupId: groupId ?? "default",
   });
 
-  return `Transfer of ${spokenRupees(amount)} to ${receiverId} is ready. Please say your 4-digit PIN to confirm.`;
+  const highValueMessage = requiresHighValueConfirmation(amount)
+    ? ` High-value transfer detected. In your confirmation step, include the exact amount ${spokenRupees(amount)} with your PIN.`
+    : "";
+
+  return `Transfer of ${spokenRupees(amount)} to ${receiverId} is ready. Please say your 4-digit PIN to confirm.${highValueMessage}`;
 }
 
 export async function confirmSendMoney(
   params: Record<string, unknown>,
 ): Promise<string> {
-  const { senderId, pin } = confirmSendMoneySchema.parse(params);
+  const { senderId, pin, amountConfirmation } = confirmSendMoneySchema.parse(params);
   const pending = pendingTransfers.get(senderId);
 
   if (!pending) {
@@ -226,6 +292,20 @@ export async function confirmSendMoney(
       reason: "no_pending_transfer",
     });
     throw new Error("No pending transfer found. Please initiate sendMoney first.");
+  }
+
+  if (pending.requiresAmountConfirmation && amountConfirmation !== pending.amount) {
+    logEvent("transaction", senderId, {
+      action: "transfer_confirm",
+      status: "failed",
+      reason: "high_value_amount_mismatch",
+      expectedAmount: pending.amount,
+      providedAmount:
+        typeof amountConfirmation === "number" ? amountConfirmation : "missing",
+    });
+    throw new Error(
+      `${HIGH_VALUE_CONFIRMATION_ERROR_PREFIX} Please confirm the exact amount of ${spokenRupees(pending.amount)} along with your PIN.`,
+    );
   }
 
   const verified = verifyPin(senderId, pin);
@@ -249,6 +329,16 @@ export async function confirmSendMoney(
     throw new Error(
       `Incorrect PIN. ${remainingAttempts} ${attemptWord} remaining.`,
     );
+  }
+
+  if (pending.requiresAmountConfirmation) {
+    logEvent("transaction", senderId, {
+      action: "transfer_high_value_confirmed",
+      status: "success",
+      receiverId: pending.receiverId,
+      amount: pending.amount,
+      groupId: pending.groupId,
+    });
   }
 
   const result = await executeTransfer({

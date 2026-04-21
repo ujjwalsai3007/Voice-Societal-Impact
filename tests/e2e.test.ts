@@ -73,6 +73,33 @@ describe("End-to-End Webhook Cycle", () => {
   });
 
   it("should handle a full sendMoney flow and update balances", async () => {
+    const setPinBody = JSON.stringify({
+      message: {
+        type: "tool-calls",
+        call: { id: "call-e2e-2-pin" },
+        toolWithToolCallList: [
+          {
+            name: "setPin",
+            toolCall: {
+              id: "tc-e2e-pin-set",
+              parameters: { userId: "alice", pin: "1234" },
+            },
+          },
+        ],
+      },
+    });
+
+    const setPinSignature = signPayload(setPinBody, TEST_SECRET);
+    const setPinRes = await app.request("/webhook/vapi", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vapi-signature": setPinSignature,
+      },
+      body: setPinBody,
+    });
+    expect(setPinRes.status).toBe(200);
+
     const initiateBody = JSON.stringify({
       message: {
         type: "tool-calls",
@@ -114,7 +141,11 @@ describe("End-to-End Webhook Cycle", () => {
             name: "confirmSendMoney",
             toolCall: {
               id: "tc-e2e-confirm",
-              parameters: { senderId: "alice", pin: "1234" },
+              parameters: {
+                senderId: "alice",
+                pin: "1234",
+                amountConfirmation: 2500,
+              },
             },
           },
         ],
@@ -141,6 +172,32 @@ describe("End-to-End Webhook Cycle", () => {
   });
 
   it("should handle a multi-tool call: sendMoney then getTransactionHistory", async () => {
+    const setPinBody = JSON.stringify({
+      message: {
+        type: "tool-calls",
+        call: { id: "call-e2e-3-pin" },
+        toolWithToolCallList: [
+          {
+            name: "setPin",
+            toolCall: {
+              id: "tc-e2e-pin-charlie",
+              parameters: { userId: "charlie", pin: "1234" },
+            },
+          },
+        ],
+      },
+    });
+
+    const setPinSig = signPayload(setPinBody, TEST_SECRET);
+    await app.request("/webhook/vapi", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vapi-signature": setPinSig,
+      },
+      body: setPinBody,
+    });
+
     const sendBody = JSON.stringify({
       message: {
         type: "tool-calls",
