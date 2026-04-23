@@ -1,6 +1,7 @@
 import type {
   AppEvent,
   BeneficiaryRecord,
+  GeminiInsight,
   LimitUsage,
   StatsResponse,
 } from "./types";
@@ -53,4 +54,9 @@ export async function fetchLimits(): Promise<{
   return fetchJson<{ usage: Record<string, LimitUsage>; breaches: AppEvent[] }>(
     "/api/limits",
   );
+}
+
+export async function fetchInsights(): Promise<GeminiInsight> {
+  const data = await fetchJson<{ insights: GeminiInsight }>("/api/insights");
+  return data.insights;
 }

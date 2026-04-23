@@ -45,3 +45,12 @@ export interface LimitUsage {
   perTxLimit: number;
   usagePercent: number;
 }
+
+export interface GeminiInsight {
+  summary: string;
+  riskAssessment: string;
+  topAlerts: string[];
+  recommendation: string;
+  generatedAt: string;
+  model: string;
+}

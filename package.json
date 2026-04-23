@@ -15,11 +15,18 @@
     "dashboard:build": "npm run build --prefix dashboard",
     "dashboard:lint": "npm run lint --prefix dashboard"
   },
-  "keywords": ["vapi", "qdrant", "voice-ai", "upi", "financial-inclusion"],
+  "keywords": [
+    "vapi",
+    "qdrant",
+    "voice-ai",
+    "upi",
+    "financial-inclusion"
+  ],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hono/node-server": "^1.19.13",
     "@qdrant/js-client-rest": "^1.17.0",
     "hono": "^4.12.12",
