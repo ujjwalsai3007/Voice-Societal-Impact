@@ -7,8 +7,21 @@ import {
   resetPinStore,
   hasPin,
   NO_PIN_SET_ERROR,
+  incrementPinFailedStreak,
+  resetPinFailedStreak,
 } from "./pin.js";
 import { logEvent } from "./event-store.js";
+import {
+  isBeneficiary,
+  addBeneficiary,
+  resetBeneficiaryStore,
+} from "./beneficiary.js";
+import {
+  checkLimits,
+  recordLimitUsage,
+  resetLimitsStore,
+} from "./limits.js";
+import { computeRisk } from "./risk.js";
 
 const DEFAULT_BALANCE = 10000;
 const MAX_PIN_ATTEMPTS = 3;
@@ -25,6 +38,8 @@ export interface Transaction {
   receiverId: string;
   amount: number;
   timestamp: string;
+  riskScore?: number;
+  riskLevel?: string;
 }
 
 function spokenRupees(amount: number): string {
@@ -43,6 +58,9 @@ export interface PendingTransaction {
   groupId: string;
   pinAttempts: number;
   requiresAmountConfirmation: boolean;
+  requiresNewPayeeConfirmation: boolean;
+  riskScore: number;
+  riskLevel: string;
   initiatedAt: string;
 }
 
@@ -62,6 +80,8 @@ export function resetAccounts(): void {
   pendingTransfers.clear();
   resetFraudState();
   resetPinStore();
+  resetBeneficiaryStore();
+  resetLimitsStore();
 }
 
 const checkBalanceSchema = z.object({
@@ -100,6 +120,7 @@ const confirmSendMoneySchema = z.object({
   senderId: z.string().min(1, "senderId is required"),
   pin: z.string(),
   amountConfirmation: z.number().positive().optional(),
+  newPayeeConfirmed: z.boolean().optional(),
 });
 
 function assertVelocityAllowed(senderId: string): void {
@@ -134,9 +155,7 @@ function assertHighValueAmountConfirmation(
   amount: number,
   amountConfirmation: number | undefined,
 ): void {
-  if (!requiresHighValueConfirmation(amount)) {
-    return;
-  }
+  if (!requiresHighValueConfirmation(amount)) return;
 
   if (amountConfirmation !== amount) {
     throw new Error(
@@ -145,19 +164,18 @@ function assertHighValueAmountConfirmation(
   }
 }
 
-async function executeTransfer(
-  transfer: {
-    senderId: string;
-    receiverId: string;
-    amount: number;
-    groupId?: string;
-  },
-): Promise<string> {
-  const { senderId, receiverId, amount, groupId } = transfer;
+async function executeTransfer(transfer: {
+  senderId: string;
+  receiverId: string;
+  amount: number;
+  groupId?: string;
+  riskScore?: number;
+  riskLevel?: string;
+}): Promise<string> {
+  const { senderId, receiverId, amount, groupId, riskScore, riskLevel } = transfer;
   assertCanTransfer(senderId, receiverId, amount);
 
   const senderBalance = getBalance(senderId);
-
   accounts.set(senderId, senderBalance - amount);
   accounts.set(receiverId, getBalance(receiverId) + amount);
 
@@ -168,9 +186,14 @@ async function executeTransfer(
     receiverId,
     amount,
     timestamp: new Date().toISOString(),
+    riskScore,
+    riskLevel,
   };
   ledger.push(tx);
+
   recordTransaction(senderId);
+  recordLimitUsage(senderId, amount, receiverId);
+
   logEvent("transaction", senderId, {
     action: "transfer",
     status: "success",
@@ -179,30 +202,23 @@ async function executeTransfer(
     receiverId,
     amount,
     groupId: groupId ?? "default",
+    riskScore: riskScore ?? 0,
+    riskLevel: riskLevel ?? "low",
   });
 
-  logger.info(
-    { txId: tx.id, senderId, receiverId, amount },
-    "Money transferred",
-  );
+  logger.info({ txId: tx.id, senderId, receiverId, amount }, "Money transferred");
 
   const memoryText = `Sent ${spokenRupees(amount)} from ${senderId} to ${receiverId} on ${tx.timestamp}. Transaction ID: ${tx.id}.`;
   upsertMemory(senderId, memoryText, { category: "transaction", txId: tx.id }, groupId).catch(
     (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      logger.error(
-        { txId: tx.id, error: msg },
-        "Failed to store transaction memory for sender",
-      );
+      logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for sender");
     },
   );
   upsertMemory(receiverId, memoryText, { category: "transaction", txId: tx.id }, groupId).catch(
     (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      logger.error(
-        { txId: tx.id, error: msg },
-        "Failed to store transaction memory for receiver",
-      );
+      logger.error({ txId: tx.id, error: msg }, "Failed to store transaction memory for receiver");
     },
   );
 
@@ -246,6 +262,19 @@ export async function initiateSendMoney(
     throw new Error(NO_PIN_SET_ERROR);
   }
 
+  const limitCheck = checkLimits(senderId, amount, receiverId);
+  if (!limitCheck.allowed) {
+    logEvent("transaction", senderId, {
+      action: "transfer_initiated",
+      status: "failed",
+      reason: "limit_exceeded",
+      limitType: limitCheck.limitType,
+      receiverId,
+      amount,
+    });
+    throw new Error(limitCheck.reason ?? "Transfer limit exceeded.");
+  }
+
   assertVelocityAllowed(senderId);
   assertCanTransfer(senderId, receiverId, amount);
 
@@ -255,6 +284,9 @@ export async function initiateSendMoney(
     );
   }
 
+  const risk = computeRisk(senderId, receiverId, amount);
+  const isNewPayee = !isBeneficiary(senderId, receiverId);
+
   pendingTransfers.set(senderId, {
     senderId,
     receiverId,
@@ -262,27 +294,58 @@ export async function initiateSendMoney(
     groupId: groupId ?? "default",
     pinAttempts: 0,
     requiresAmountConfirmation: requiresHighValueConfirmation(amount),
+    requiresNewPayeeConfirmation: isNewPayee,
+    riskScore: risk.score,
+    riskLevel: risk.level,
     initiatedAt: new Date().toISOString(),
   });
+
   logEvent("transaction", senderId, {
     action: "transfer_initiated",
     status: "pending",
     receiverId,
     amount,
     groupId: groupId ?? "default",
+    riskScore: risk.score,
+    riskLevel: risk.level,
+    newPayeeWarning: isNewPayee,
+    riskFactors: risk.factors.filter((f) => f.triggered).map((f) => f.name),
   });
 
-  const highValueMessage = requiresHighValueConfirmation(amount)
-    ? ` High-value transfer detected. In your confirmation step, include the exact amount ${spokenRupees(amount)} with your PIN.`
-    : "";
+  const parts: string[] = [
+    `Transfer of ${spokenRupees(amount)} to ${receiverId} is ready.`,
+  ];
 
-  return `Transfer of ${spokenRupees(amount)} to ${receiverId} is ready. Please say your 4-digit PIN to confirm.${highValueMessage}`;
+  if (isNewPayee) {
+    parts.push(
+      `⚠️ New payee alert: You have never sent money to ${receiverId} before. Please confirm carefully.`,
+    );
+  }
+
+  if (risk.level === "high") {
+    parts.push(
+      `Risk level is HIGH (score ${risk.score}). Extra verification required.`,
+    );
+  } else if (risk.level === "medium") {
+    parts.push(`Risk level is medium (score ${risk.score}). Proceed with care.`);
+  }
+
+  if (requiresHighValueConfirmation(amount)) {
+    parts.push(
+      `High-value transfer. Please confirm the exact amount ${spokenRupees(amount)} with your PIN.`,
+    );
+  }
+
+  parts.push("Say your 4-digit PIN to confirm.");
+  return parts.join(" ");
 }
 
 export async function confirmSendMoney(
   params: Record<string, unknown>,
 ): Promise<string> {
-  const { senderId, pin, amountConfirmation } = confirmSendMoneySchema.parse(params);
+  const { senderId, pin, amountConfirmation, newPayeeConfirmed } =
+    confirmSendMoneySchema.parse(params);
+
   const pending = pendingTransfers.get(senderId);
 
   if (!pending) {
@@ -291,10 +354,27 @@ export async function confirmSendMoney(
       status: "failed",
       reason: "no_pending_transfer",
     });
-    throw new Error("No pending transfer found. Please initiate sendMoney first.");
+    throw new Error(
+      "No pending transfer found. Please initiate sendMoney first.",
+    );
   }
 
-  if (pending.requiresAmountConfirmation && amountConfirmation !== pending.amount) {
+  if (pending.requiresNewPayeeConfirmation && newPayeeConfirmed !== true) {
+    logEvent("transaction", senderId, {
+      action: "transfer_confirm",
+      status: "failed",
+      reason: "new_payee_not_confirmed",
+      receiverId: pending.receiverId,
+    });
+    throw new Error(
+      `${pending.receiverId} is a new payee. Please explicitly confirm by saying "Yes, I confirm new payee" and provide your PIN again.`,
+    );
+  }
+
+  if (
+    pending.requiresAmountConfirmation &&
+    amountConfirmation !== pending.amount
+  ) {
     logEvent("transaction", senderId, {
       action: "transfer_confirm",
       status: "failed",
@@ -311,6 +391,7 @@ export async function confirmSendMoney(
   const verified = verifyPin(senderId, pin);
   if (!verified) {
     pending.pinAttempts += 1;
+    incrementPinFailedStreak(senderId);
     const remainingAttempts = MAX_PIN_ATTEMPTS - pending.pinAttempts;
 
     if (remainingAttempts <= 0) {
@@ -331,6 +412,8 @@ export async function confirmSendMoney(
     );
   }
 
+  resetPinFailedStreak(senderId);
+
   if (pending.requiresAmountConfirmation) {
     logEvent("transaction", senderId, {
       action: "transfer_high_value_confirmed",
@@ -346,7 +429,12 @@ export async function confirmSendMoney(
     receiverId: pending.receiverId,
     amount: pending.amount,
     groupId: pending.groupId,
+    riskScore: pending.riskScore,
+    riskLevel: pending.riskLevel,
   });
+
+  addBeneficiary(senderId, pending.receiverId);
+
   pendingTransfers.delete(senderId);
   return result;
 }
@@ -381,10 +469,11 @@ export async function getTransactionHistory(
     return `${direction} ${spokenRupees(tx.amount)} ${direction === "Sent" ? "to" : "from"} ${counterparty}`;
   });
 
-  logger.info(
-    { userId, count: userTxns.length },
-    "Transaction history retrieved",
-  );
+  logger.info({ userId, count: userTxns.length }, "Transaction history retrieved");
 
   return `Transaction history for ${userId}: ${lines.join(". ")}`;
+}
+
+export function getLedger(): Transaction[] {
+  return ledger;
 }

@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 const headingFont = Space_Grotesk({
   variable: "--font-heading",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const monoFont = IBM_Plex_Mono({
@@ -16,8 +16,9 @@ const monoFont = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VoicePay Ops Dashboard",
-  description: "Live monitoring dashboard for VoicePay Assist",
+  title: "VoicePay Ops — Voice Payment Intelligence",
+  description:
+    "Real-time operations platform for VoicePay Assist — monitor AI agent decisions, transactions, fraud, risk scores, and beneficiary safety.",
 };
 
 export default function RootLayout({
@@ -26,7 +27,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${headingFont.variable} ${monoFont.variable} dark`}>
+    <html
+      lang="en"
+      className={`${headingFont.variable} ${monoFont.variable} dark`}
+    >
       <body>
         <AppShell>{children}</AppShell>
       </body>

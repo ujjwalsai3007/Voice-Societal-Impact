@@ -74,11 +74,12 @@ describe("PIN Service (src/services/pin.ts)", () => {
         receiverId: "bob",
         amount: 700,
       });
-      expect(message).toContain("Please say your 4-digit PIN");
+      expect(message).toContain("4-digit PIN");
 
       const confirmation = await confirmSendMoney({
         senderId: "alice",
         pin: "1234",
+        newPayeeConfirmed: true,
       });
       expect(confirmation).toContain("Successfully sent 700 rupees");
       expect(getBalance("alice")).toBe(9300);
@@ -97,6 +98,7 @@ describe("PIN Service (src/services/pin.ts)", () => {
         confirmSendMoney({
           senderId: "pin-attempt-user",
           pin: "9999",
+          newPayeeConfirmed: true,
         }),
       ).rejects.toThrow("Incorrect PIN. 2 attempts remaining.");
     });
@@ -113,18 +115,21 @@ describe("PIN Service (src/services/pin.ts)", () => {
         confirmSendMoney({
           senderId: "pin-lock-user",
           pin: "0000",
+          newPayeeConfirmed: true,
         }),
       ).rejects.toThrow("Incorrect PIN. 2 attempts remaining.");
       await expect(
         confirmSendMoney({
           senderId: "pin-lock-user",
           pin: "0000",
+          newPayeeConfirmed: true,
         }),
       ).rejects.toThrow("Incorrect PIN. 1 attempt remaining.");
       await expect(
         confirmSendMoney({
           senderId: "pin-lock-user",
           pin: "0000",
+          newPayeeConfirmed: true,
         }),
       ).rejects.toThrow(
         "Incorrect PIN. Maximum attempts reached. Pending transfer has been cancelled.",
@@ -134,6 +139,7 @@ describe("PIN Service (src/services/pin.ts)", () => {
         confirmSendMoney({
           senderId: "pin-lock-user",
           pin: "1234",
+          newPayeeConfirmed: true,
         }),
       ).rejects.toThrow("No pending transfer found. Please initiate sendMoney first.");
     });
@@ -160,6 +166,7 @@ describe("PIN Service (src/services/pin.ts)", () => {
         confirmSendMoney({
           senderId: "high-value-user",
           pin: "1234",
+          newPayeeConfirmed: true,
         }),
       ).rejects.toThrow(HIGH_VALUE_CONFIRMATION_ERROR_PREFIX);
 
@@ -167,6 +174,7 @@ describe("PIN Service (src/services/pin.ts)", () => {
         senderId: "high-value-user",
         pin: "1234",
         amountConfirmation: 2500,
+        newPayeeConfirmed: true,
       });
       expect(confirmation).toContain("Successfully sent 2,500 rupees");
       expect(getBalance("high-value-user")).toBe(7500);

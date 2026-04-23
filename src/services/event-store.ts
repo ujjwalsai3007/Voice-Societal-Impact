@@ -3,7 +3,9 @@ export type AppEventType =
   | "fraud_alert"
   | "transaction"
   | "pin_verification"
-  | "memory_operation";
+  | "memory_operation"
+  | "beneficiary"
+  | "limit_breach";
 
 export interface AppEvent {
   id: string;
@@ -49,7 +51,15 @@ export function getFraudAlerts(): AppEvent[] {
   return getEvents().filter((event) => event.type === "fraud_alert");
 }
 
-export function getStats(): {
+export function getLimitBreaches(): AppEvent[] {
+  return getEvents().filter((event) => event.type === "limit_breach");
+}
+
+export function getBeneficiaryEvents(): AppEvent[] {
+  return getEvents().filter((event) => event.type === "beneficiary");
+}
+
+export interface StatsResponse {
   totalTransactions: number;
   blockedCount: number;
   activeUsers: number;
@@ -59,47 +69,73 @@ export function getStats(): {
   pinFailedCount: number;
   highValueChallengeCount: number;
   highValueConfirmedCount: number;
-} {
+  totalBeneficiaries: number;
+  limitBreaches: number;
+  avgRiskScore: number;
+  highRiskTransfers: number;
+  newPayeeWarnings: number;
+}
+
+export function getStats(): StatsResponse {
   const txEvents = getTransactions().filter(
-    (event) =>
-      event.details["action"] === "transfer" &&
-      event.details["status"] === "success",
-  );
-  const initiatedEvents = getTransactions().filter(
-    (event) =>
-      event.details["action"] === "transfer_initiated" &&
-      event.details["status"] === "pending",
-  );
-  const highValueChallengeEvents = getTransactions().filter(
-    (event) =>
-      event.details["action"] === "transfer_confirm" &&
-      event.details["reason"] === "high_value_amount_mismatch",
-  );
-  const highValueConfirmedEvents = getTransactions().filter(
-    (event) =>
-      event.details["action"] === "transfer_high_value_confirmed" &&
-      event.details["status"] === "success",
+    (e) => e.details["action"] === "transfer" && e.details["status"] === "success",
   );
 
-  const pinEvents = getEvents().filter(
-    (event) => event.type === "pin_verification",
+  const initiatedEvents = getTransactions().filter(
+    (e) => e.details["action"] === "transfer_initiated" && e.details["status"] === "pending",
   );
-  const pinVerifiedEvents = pinEvents.filter(
-    (event) => event.details["status"] === "verified",
+
+  const highValueChallengeEvents = getTransactions().filter(
+    (e) =>
+      e.details["action"] === "transfer_confirm" &&
+      e.details["reason"] === "high_value_amount_mismatch",
   );
-  const pinFailedEvents = pinEvents.filter((event) => {
-    const status = event.details["status"];
+
+  const highValueConfirmedEvents = getTransactions().filter(
+    (e) =>
+      e.details["action"] === "transfer_high_value_confirmed" &&
+      e.details["status"] === "success",
+  );
+
+  const pinEvents = getEvents().filter((e) => e.type === "pin_verification");
+  const pinVerifiedEvents = pinEvents.filter((e) => e.details["status"] === "verified");
+  const pinFailedEvents = pinEvents.filter((e) => {
+    const status = e.details["status"];
     return status === "failed" || status === "invalid_format";
   });
 
   const activeUsers = new Set(
-    events.map((event) => event.userId).filter((userId) => userId.length > 0),
+    events.map((e) => e.userId).filter((id) => id.length > 0),
   );
 
-  const totalVolume = txEvents.reduce((sum, event) => {
-    const amount = event.details["amount"];
+  const totalVolume = txEvents.reduce((sum, e) => {
+    const amount = e.details["amount"];
     return sum + (typeof amount === "number" ? amount : 0);
   }, 0);
+
+  const beneficiaryAddedEvents = getBeneficiaryEvents().filter(
+    (e) => e.details["action"] === "beneficiary_added",
+  );
+
+  const riskScoreEvents = initiatedEvents.filter(
+    (e) => typeof e.details["riskScore"] === "number",
+  );
+
+  const avgRiskScore =
+    riskScoreEvents.length > 0
+      ? Math.round(
+          riskScoreEvents.reduce((sum, e) => sum + (e.details["riskScore"] as number), 0) /
+            riskScoreEvents.length,
+        )
+      : 0;
+
+  const highRiskTransfers = riskScoreEvents.filter(
+    (e) => e.details["riskLevel"] === "high",
+  ).length;
+
+  const newPayeeWarnings = initiatedEvents.filter(
+    (e) => e.details["newPayeeWarning"] === true,
+  ).length;
 
   return {
     totalTransactions: txEvents.length,
@@ -111,6 +147,11 @@ export function getStats(): {
     pinFailedCount: pinFailedEvents.length,
     highValueChallengeCount: highValueChallengeEvents.length,
     highValueConfirmedCount: highValueConfirmedEvents.length,
+    totalBeneficiaries: beneficiaryAddedEvents.length,
+    limitBreaches: getLimitBreaches().length,
+    avgRiskScore,
+    highRiskTransfers,
+    newPayeeWarnings,
   };
 }
 

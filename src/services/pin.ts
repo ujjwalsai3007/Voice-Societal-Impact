@@ -115,8 +115,23 @@ export function verifyPin(userId: string, pin: string): boolean {
 
 export function resetPinStore(): void {
   pinHashStore.clear();
+  pinFailedStreaks.clear();
 }
 
 export function getPinUserCount(): number {
   return pinHashStore.size;
+}
+
+const pinFailedStreaks = new Map<string, number>();
+
+export function incrementPinFailedStreak(userId: string): void {
+  pinFailedStreaks.set(userId, (pinFailedStreaks.get(userId) ?? 0) + 1);
+}
+
+export function resetPinFailedStreak(userId: string): void {
+  pinFailedStreaks.delete(userId);
+}
+
+export function getPinFailedStreak(userId: string): number {
+  return pinFailedStreaks.get(userId) ?? 0;
 }

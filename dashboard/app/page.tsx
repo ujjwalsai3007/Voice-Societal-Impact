@@ -5,6 +5,18 @@ import { fetchEvents, fetchStats } from "@/lib/api";
 import type { AppEvent, StatsResponse } from "@/lib/types";
 import { compactDetails, formatCurrency, formatTimestamp } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  ArrowUpRight,
+  ShieldCheck,
+  Users,
+  TrendingUp,
+  Zap,
+  AlertTriangle,
+  KeyRound,
+  BarChart3,
+  Gauge,
+  UserCheck,
+} from "lucide-react";
 
 const EMPTY_STATS: StatsResponse = {
   totalTransactions: 0,
@@ -16,7 +28,22 @@ const EMPTY_STATS: StatsResponse = {
   pinFailedCount: 0,
   highValueChallengeCount: 0,
   highValueConfirmedCount: 0,
+  totalBeneficiaries: 0,
+  limitBreaches: 0,
+  avgRiskScore: 0,
+  highRiskTransfers: 0,
+  newPayeeWarnings: 0,
 };
+
+interface StatCard {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon: React.ElementType;
+  color: string;
+  border: string;
+  bg: string;
+}
 
 export default function HomePage() {
   const [stats, setStats] = useState<StatsResponse>(EMPTY_STATS);
@@ -30,115 +57,222 @@ export default function HomePage() {
       try {
         const [statsData, eventData] = await Promise.all([
           fetchStats(),
-          fetchEvents(12),
+          fetchEvents(10),
         ]);
-
-        if (!alive) {
-          return;
-        }
-
+        if (!alive) return;
         setStats(statsData);
         setEvents(eventData);
         setError("");
       } catch (err) {
-        if (!alive) {
-          return;
-        }
+        if (!alive) return;
         setError(err instanceof Error ? err.message : "Failed to load data");
       }
     };
 
     void load();
     const interval = window.setInterval(load, 2000);
-
     return () => {
       alive = false;
       window.clearInterval(interval);
     };
   }, []);
 
+  const statCards: StatCard[] = [
+    {
+      label: "Transactions",
+      value: stats.totalTransactions,
+      sub: `${stats.transferInitiatedCount} initiated`,
+      icon: ArrowUpRight,
+      color: "text-emerald-300",
+      border: "border-emerald-400/20",
+      bg: "bg-emerald-500/8",
+    },
+    {
+      label: "Total Volume",
+      value: formatCurrency(stats.totalVolume),
+      sub: "Settled transfers",
+      icon: BarChart3,
+      color: "text-indigo-300",
+      border: "border-indigo-400/20",
+      bg: "bg-indigo-500/8",
+    },
+    {
+      label: "Active Users",
+      value: stats.activeUsers,
+      sub: "Unique callers",
+      icon: Users,
+      color: "text-cyan-300",
+      border: "border-cyan-400/20",
+      bg: "bg-cyan-500/8",
+    },
+    {
+      label: "Fraud Blocks",
+      value: stats.blockedCount,
+      sub: `${stats.limitBreaches} limit breaches`,
+      icon: ShieldCheck,
+      color: "text-rose-300",
+      border: "border-rose-400/20",
+      bg: "bg-rose-500/8",
+    },
+    {
+      label: "Avg Risk Score",
+      value: stats.avgRiskScore,
+      sub: `${stats.highRiskTransfers} high-risk transfers`,
+      icon: TrendingUp,
+      color: "text-amber-300",
+      border: "border-amber-400/20",
+      bg: "bg-amber-500/8",
+    },
+    {
+      label: "PIN Verified",
+      value: stats.pinVerifiedCount,
+      sub: `${stats.pinFailedCount} failures`,
+      icon: KeyRound,
+      color: "text-sky-300",
+      border: "border-sky-400/20",
+      bg: "bg-sky-500/8",
+    },
+    {
+      label: "Beneficiaries",
+      value: stats.totalBeneficiaries,
+      sub: `${stats.newPayeeWarnings} new-payee warnings`,
+      icon: UserCheck,
+      color: "text-violet-300",
+      border: "border-violet-400/20",
+      bg: "bg-violet-500/8",
+    },
+    {
+      label: "High-Value",
+      value: stats.highValueConfirmedCount,
+      sub: `${stats.highValueChallengeCount} challenged`,
+      icon: Zap,
+      color: "text-yellow-300",
+      border: "border-yellow-400/20",
+      bg: "bg-yellow-500/8",
+    },
+    {
+      label: "Limit Breaches",
+      value: stats.limitBreaches,
+      sub: "Daily / per-tx / per-payee",
+      icon: Gauge,
+      color: "text-orange-300",
+      border: "border-orange-400/20",
+      bg: "bg-orange-500/8",
+    },
+    {
+      label: "New Payee Warnings",
+      value: stats.newPayeeWarnings,
+      sub: "Extra confirmation required",
+      icon: AlertTriangle,
+      color: "text-pink-300",
+      border: "border-pink-400/20",
+      bg: "bg-pink-500/8",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-heading text-2xl font-semibold text-white md:text-3xl">
-            Command Center
-          </h2>
-          <p className="mt-1 text-sm text-slate-300">
-            Near real-time view of payment activity, safety controls, and tool orchestration.
+    <div className="space-y-10">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-800/40 px-6 py-10 md:px-10 md:py-14">
+        <div className="absolute right-0 top-0 -z-10 h-64 w-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute bottom-0 left-20 -z-10 h-48 w-64 rounded-full bg-indigo-500/8 blur-3xl" />
+        <div className="max-w-2xl">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            Polling every 2 seconds
+          </div>
+          <h1 className="font-heading text-3xl font-bold text-white md:text-4xl">
+            Voice Payment <span className="text-primary">Intelligence</span>
+          </h1>
+          <p className="mt-3 text-base text-slate-300 md:text-lg">
+            Real-time telemetry for every AI agent decision — from PIN verification
+            to fraud detection, risk scoring, and beneficiary safety checks.
           </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> Velocity fraud detection
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+              <TrendingUp className="h-3.5 w-3.5 text-amber-400" /> Risk engine v2
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+              <UserCheck className="h-3.5 w-3.5 text-violet-400" /> Beneficiary safety
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+              <Gauge className="h-3.5 w-3.5 text-orange-400" /> Transaction limits
+            </div>
+          </div>
         </div>
-        <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
-          Live polling every 2s
-        </span>
-      </header>
+      </section>
 
       {error ? (
         <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 p-3 text-sm text-rose-100">
-          {error}
+          {error} — is the backend running at localhost:3000?
         </div>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <article className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Total Transactions</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.totalTransactions}</p>
-        </article>
-        <article className="rounded-xl border border-rose-400/30 bg-rose-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Blocked Count</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.blockedCount}</p>
-        </article>
-        <article className="rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-cyan-100">Active Users</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.activeUsers}</p>
-        </article>
-        <article className="rounded-xl border border-indigo-400/30 bg-indigo-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-indigo-100">Total Volume</p>
-          <p className="mt-3 font-heading text-3xl text-white">{formatCurrency(stats.totalVolume)}</p>
-        </article>
-        <article className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-amber-100">Initiated Transfers</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.transferInitiatedCount}</p>
-        </article>
-        <article className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-100">PIN Verified</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.pinVerifiedCount}</p>
-        </article>
-        <article className="rounded-xl border border-orange-400/30 bg-orange-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-orange-100">PIN Failed</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.pinFailedCount}</p>
-        </article>
-        <article className="rounded-xl border border-yellow-400/30 bg-yellow-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-yellow-100">High-Value Challenges</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.highValueChallengeCount}</p>
-        </article>
-        <article className="rounded-xl border border-teal-400/30 bg-teal-500/10 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-teal-100">High-Value Confirmed</p>
-          <p className="mt-3 font-heading text-3xl text-white">{stats.highValueConfirmedCount}</p>
-        </article>
+      {/* KPI grid */}
+      <section>
+        <h2 className="mb-4 font-heading text-sm font-semibold uppercase tracking-widest text-slate-400">
+          Platform Metrics
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {statCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <article
+                key={card.label}
+                className={`rounded-xl border ${card.border} ${card.bg} p-4 transition-colors hover:bg-white/5`}
+              >
+                <div className="flex items-start justify-between">
+                  <p className="text-xs text-slate-400">{card.label}</p>
+                  <Icon className={`h-4 w-4 ${card.color}`} />
+                </div>
+                <p className={`mt-3 font-heading text-2xl font-bold ${card.color}`}>
+                  {card.value}
+                </p>
+                {card.sub && (
+                  <p className="mt-1 text-[11px] text-slate-500">{card.sub}</p>
+                )}
+              </article>
+            );
+          })}
+        </div>
       </section>
 
-      <section className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-        <h3 className="font-heading text-lg text-white">Recent Event Feed</h3>
-        <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1">
+      {/* Live event feed */}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-heading text-sm font-semibold uppercase tracking-widest text-slate-400">
+            Live Event Feed
+          </h2>
+          <a href="/events" className="text-xs text-primary hover:underline">
+            View all →
+          </a>
+        </div>
+        <div className="space-y-2">
           {events.length === 0 ? (
-            <p className="text-sm text-slate-400">No events yet.</p>
+            <div className="rounded-xl border border-white/8 bg-white/3 p-6 text-center text-sm text-slate-500">
+              No events yet. Start a voice call to see live data appear here.
+            </div>
           ) : (
             events.map((event) => (
               <article
                 key={event.id}
-                className="rounded-lg border border-white/10 bg-slate-950/70 p-3"
+                className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/8 bg-slate-900/50 px-4 py-3 transition-colors hover:bg-slate-900/80"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <StatusBadge type={event.type} />
-                    <span className="text-xs text-slate-300">{event.userId}</span>
-                  </div>
-                  <time className="font-mono text-xs text-slate-400">
-                    {formatTimestamp(event.timestamp)}
-                  </time>
+                <div className="flex items-center gap-3">
+                  <StatusBadge type={event.type} />
+                  <span className="rounded-md bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-300">
+                    {event.userId}
+                  </span>
+                  <span className="text-sm text-slate-300">
+                    {compactDetails(event.details)}
+                  </span>
                 </div>
-                <p className="mt-2 text-sm text-slate-200">{compactDetails(event.details)}</p>
+                <time className="font-mono text-xs text-slate-500">
+                  {formatTimestamp(event.timestamp)}
+                </time>
               </article>
             ))
           )}

@@ -9,6 +9,11 @@ import {
 import { recallMemory } from "./memory.js";
 import { logger } from "../lib/logger.js";
 import { setPin, changePin, hasPin } from "./pin.js";
+import {
+  addBeneficiary,
+  listBeneficiaries,
+  removeBeneficiary,
+} from "./beneficiary.js";
 
 const recallContextSchema = z.object({
   userId: z.string().min(1, "userId is required"),
@@ -20,7 +25,8 @@ const recallContextSchema = z.object({
 async function recallContext(
   params: Record<string, unknown>,
 ): Promise<string> {
-  const { userId, query, topK = 3, groupId } = recallContextSchema.parse(params);
+  const { userId, query, topK = 3, groupId } =
+    recallContextSchema.parse(params);
 
   const memories = await recallMemory(userId, query, topK, groupId);
 
@@ -79,6 +85,46 @@ async function checkPinStatus(
   return `PIN is already set for ${userId}.`;
 }
 
+const beneficiaryBaseSchema = z.object({
+  userId: z.string().min(1, "userId is required"),
+  beneficiaryId: z.string().min(1, "beneficiaryId is required"),
+});
+
+async function addBeneficiaryTool(
+  params: Record<string, unknown>,
+): Promise<string> {
+  const { userId, beneficiaryId } = beneficiaryBaseSchema.parse(params);
+  addBeneficiary(userId, beneficiaryId);
+  return `${beneficiaryId} has been added to your trusted beneficiaries. Future transfers to them will skip the new-payee warning.`;
+}
+
+const listBeneficiariesSchema = z.object({
+  userId: z.string().min(1, "userId is required"),
+});
+
+async function listBeneficiariesTool(
+  params: Record<string, unknown>,
+): Promise<string> {
+  const { userId } = listBeneficiariesSchema.parse(params);
+  const list = listBeneficiaries(userId);
+  if (list.length === 0) {
+    return `${userId} has no trusted beneficiaries yet. After your first successful transfer to someone, they are automatically added.`;
+  }
+  const names = list.map((b) => b.beneficiaryId).join(", ");
+  return `Trusted beneficiaries for ${userId}: ${names}.`;
+}
+
+async function removeBeneficiaryTool(
+  params: Record<string, unknown>,
+): Promise<string> {
+  const { userId, beneficiaryId } = beneficiaryBaseSchema.parse(params);
+  const removed = removeBeneficiary(userId, beneficiaryId);
+  if (!removed) {
+    return `${beneficiaryId} was not found in your trusted beneficiaries.`;
+  }
+  return `${beneficiaryId} has been removed from your trusted beneficiaries. Future transfers to them will require new-payee confirmation.`;
+}
+
 export function registerUpiTools(): void {
   registerToolHandler("checkBalance", checkBalance);
   registerToolHandler("sendMoney", initiateSendMoney);
@@ -88,4 +134,7 @@ export function registerUpiTools(): void {
   registerToolHandler("checkPinStatus", checkPinStatus);
   registerToolHandler("getTransactionHistory", getTransactionHistory);
   registerToolHandler("recallContext", recallContext);
+  registerToolHandler("addBeneficiary", addBeneficiaryTool);
+  registerToolHandler("listBeneficiaries", listBeneficiariesTool);
+  registerToolHandler("removeBeneficiary", removeBeneficiaryTool);
 }

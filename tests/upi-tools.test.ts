@@ -9,7 +9,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
     resetAccounts();
   });
 
-  it("should register payment, PIN, and history tools", () => {
+  it("should register payment, PIN, history, and beneficiary tools", () => {
     registerUpiTools();
     const tools = getRegisteredTools();
     expect(tools).toContain("checkBalance");
@@ -19,6 +19,9 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
     expect(tools).toContain("changePin");
     expect(tools).toContain("checkPinStatus");
     expect(tools).toContain("getTransactionHistory");
+    expect(tools).toContain("addBeneficiary");
+    expect(tools).toContain("listBeneficiaries");
+    expect(tools).toContain("removeBeneficiary");
   });
 
   it("should throw if registered twice", () => {
@@ -99,7 +102,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
           name: "confirmSendMoney",
           toolCall: {
             id: "tc-sm-2-confirm",
-            parameters: { senderId: "user-a", pin: "1234" },
+            parameters: { senderId: "user-a", pin: "1234", newPayeeConfirmed: true },
           },
         },
       ]);
@@ -145,7 +148,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
       expect(changeResults[0]!.result).toContain("PIN updated successfully");
     });
 
-    it("should return error for sendMoney with insufficient funds", async () => {
+    it("should return error for sendMoney that violates a limit", async () => {
       await dispatchToolCalls([
         {
           name: "setPin",
@@ -156,6 +159,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
         },
       ]);
 
+      // 99_999 exceeds the per-transaction limit of 10_000 — limit check fires first
       const results = await dispatchToolCalls([
         {
           name: "sendMoney",
@@ -168,7 +172,7 @@ describe("UPI Tool Handler Registration (src/services/upi-tools.ts)", () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]!.toolCallId).toBe("tc-sm-fail");
-      expect(results[0]!.error).toMatch(/insufficient/i);
+      expect(results[0]!.error).toMatch(/per-transaction limit|insufficient/i);
       expect(results[0]!.result).toBeUndefined();
     });
 

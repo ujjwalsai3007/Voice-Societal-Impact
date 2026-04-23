@@ -9,9 +9,13 @@ import { createQdrantClient, ensureCollection, checkQdrantHealth, COLLECTION_NAM
 import {
   getEvents,
   getFraudAlerts,
+  getLimitBreaches,
+  getBeneficiaryEvents,
   getStats,
   getTransactions,
 } from "./services/event-store.js";
+import { getAllBeneficiaries } from "./services/beneficiary.js";
+import { getAllLimitUsage } from "./services/limits.js";
 
 export function createApp(vapiSecret?: string): Hono {
   const secret = vapiSecret ?? process.env["VAPI_SECRET"] ?? "";
@@ -66,6 +70,20 @@ export function createApp(vapiSecret?: string): Hono {
 
   app.get("/api/stats", (c) => {
     return c.json(getStats());
+  });
+
+  app.get("/api/beneficiaries", (c) => {
+    return c.json({
+      beneficiaries: getAllBeneficiaries(),
+      events: getBeneficiaryEvents(),
+    });
+  });
+
+  app.get("/api/limits", (c) => {
+    return c.json({
+      usage: getAllLimitUsage(),
+      breaches: getLimitBreaches(),
+    });
   });
 
   if (secret) {
