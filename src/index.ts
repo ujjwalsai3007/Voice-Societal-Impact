@@ -16,6 +16,7 @@ import {
 } from "./services/event-store.js";
 import { getAllBeneficiaries } from "./services/beneficiary.js";
 import { getAllLimitUsage } from "./services/limits.js";
+import { generateInsights } from "./services/gemini.js";
 
 export function createApp(vapiSecret?: string): Hono {
   const secret = vapiSecret ?? process.env["VAPI_SECRET"] ?? "";
@@ -84,6 +85,18 @@ export function createApp(vapiSecret?: string): Hono {
       usage: getAllLimitUsage(),
       breaches: getLimitBreaches(),
     });
+  });
+
+  app.get("/api/insights", async (c) => {
+    try {
+      const events = getEvents();
+      const insights = await generateInsights(events);
+      return c.json({ insights });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      pinoLogger.error({ error: message }, "Gemini insights generation failed");
+      return c.json({ error: "Failed to generate insights", detail: message }, 500);
+    }
   });
 
   if (secret) {

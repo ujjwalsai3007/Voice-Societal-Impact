@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchEvents, fetchStats } from "@/lib/api";
-import type { AppEvent, StatsResponse } from "@/lib/types";
+import { fetchEvents, fetchInsights, fetchStats } from "@/lib/api";
+import type { AppEvent, GeminiInsight, StatsResponse } from "@/lib/types";
 import { compactDetails, formatCurrency, formatTimestamp } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import {
@@ -16,6 +16,8 @@ import {
   BarChart3,
   Gauge,
   UserCheck,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 
 const EMPTY_STATS: StatsResponse = {
@@ -45,10 +47,22 @@ interface StatCard {
   bg: string;
 }
 
+const EMPTY_INSIGHT: GeminiInsight = {
+  summary: "",
+  riskAssessment: "",
+  topAlerts: [],
+  recommendation: "",
+  generatedAt: "",
+  model: "",
+};
+
 export default function HomePage() {
   const [stats, setStats] = useState<StatsResponse>(EMPTY_STATS);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [error, setError] = useState<string>("");
+  const [insight, setInsight] = useState<GeminiInsight>(EMPTY_INSIGHT);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightError, setInsightError] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -76,6 +90,19 @@ export default function HomePage() {
       window.clearInterval(interval);
     };
   }, []);
+
+  const loadInsight = async () => {
+    setInsightLoading(true);
+    setInsightError("");
+    try {
+      const data = await fetchInsights();
+      setInsight(data);
+    } catch (err) {
+      setInsightError(err instanceof Error ? err.message : "Failed to load insights");
+    } finally {
+      setInsightLoading(false);
+    }
+  };
 
   const statCards: StatCard[] = [
     {
@@ -210,6 +237,95 @@ export default function HomePage() {
           {error} — is the backend running at localhost:3000?
         </div>
       ) : null}
+
+      {/* Gemini AI Insights */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-blue-400" />
+            <h2 className="font-heading text-sm font-semibold uppercase tracking-widest text-slate-400">
+              Gemini AI Insights
+            </h2>
+            <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+              gemini-2.5-flash
+            </span>
+          </div>
+          <button
+            onClick={() => void loadInsight()}
+            disabled={insightLoading}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs text-blue-300 transition-colors hover:bg-blue-500/20 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${insightLoading ? "animate-spin" : ""}`} />
+            {insightLoading ? "Analyzing…" : "Run Analysis"}
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-blue-400/20 bg-gradient-to-br from-blue-950/40 via-slate-900/60 to-slate-900/40 p-5">
+          {insightError ? (
+            <p className="text-sm text-rose-300">{insightError}</p>
+          ) : insight.summary ? (
+            <div className="space-y-4">
+              {/* Risk pill */}
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    insight.riskAssessment.startsWith("HIGH")
+                      ? "bg-rose-500/20 text-rose-300 border border-rose-400/30"
+                      : insight.riskAssessment.startsWith("MEDIUM")
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-400/30"
+                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                  }`}
+                >
+                  {insight.riskAssessment.split("—")[0]?.trim() ?? insight.riskAssessment}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {insight.riskAssessment.includes("—")
+                    ? insight.riskAssessment.split("—").slice(1).join("—").trim()
+                    : ""}
+                </span>
+              </div>
+
+              {/* Summary */}
+              <p className="text-sm leading-relaxed text-slate-200">{insight.summary}</p>
+
+              {/* Alerts */}
+              {insight.topAlerts.length > 0 && (
+                <div className="space-y-1.5">
+                  {insight.topAlerts.map((alert, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/8 px-3 py-2 text-xs text-amber-200"
+                    >
+                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" />
+                      {alert}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Recommendation */}
+              <div className="flex items-start gap-2 rounded-lg border border-blue-400/20 bg-blue-500/8 px-3 py-2 text-xs text-blue-200">
+                <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-blue-400" />
+                <span><strong>Recommendation:</strong> {insight.recommendation}</span>
+              </div>
+
+              <p className="text-[10px] text-slate-600">
+                Generated at {new Date(insight.generatedAt).toLocaleTimeString()} · {insight.model}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <Sparkles className="h-8 w-8 text-blue-400/40" />
+              <p className="text-sm text-slate-400">
+                Click <strong className="text-blue-300">Run Analysis</strong> to get Gemini&apos;s real-time security briefing on your session.
+              </p>
+              <p className="text-xs text-slate-600">
+                Gemini analyzes transactions, fraud alerts, risk scores, and beneficiary changes.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* KPI grid */}
       <section>
