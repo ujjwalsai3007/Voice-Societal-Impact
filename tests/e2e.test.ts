@@ -145,6 +145,7 @@ describe("End-to-End Webhook Cycle", () => {
                 senderId: "alice",
                 pin: "1234",
                 amountConfirmation: 2500,
+                newPayeeConfirmed: true,
               },
             },
           },
@@ -233,7 +234,7 @@ describe("End-to-End Webhook Cycle", () => {
             name: "confirmSendMoney",
             toolCall: {
               id: "tc-e2e-send-confirm",
-              parameters: { senderId: "charlie", pin: "1234" },
+              parameters: { senderId: "charlie", pin: "1234", newPayeeConfirmed: true },
             },
           },
         ],

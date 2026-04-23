@@ -3,7 +3,9 @@ export type AppEventType =
   | "fraud_alert"
   | "transaction"
   | "pin_verification"
-  | "memory_operation";
+  | "memory_operation"
+  | "beneficiary"
+  | "limit_breach";
 
 export interface AppEvent {
   id: string;
@@ -23,4 +25,23 @@ export interface StatsResponse {
   pinFailedCount: number;
   highValueChallengeCount: number;
   highValueConfirmedCount: number;
+  totalBeneficiaries: number;
+  limitBreaches: number;
+  avgRiskScore: number;
+  highRiskTransfers: number;
+  newPayeeWarnings: number;
+}
+
+export interface BeneficiaryRecord {
+  userId: string;
+  beneficiaryId: string;
+  addedAt: string;
+}
+
+export interface LimitUsage {
+  dailyUsed: number;
+  dailyLimit: number;
+  dailyRemaining: number;
+  perTxLimit: number;
+  usagePercent: number;
 }

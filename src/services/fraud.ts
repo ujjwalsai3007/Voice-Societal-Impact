@@ -47,6 +47,12 @@ export function checkVelocity(
   return { allowed: true };
 }
 
+export function getVelocityCount(userId: string): number {
+  const now = Date.now();
+  const existing = txTimestampsByUser.get(userId) ?? [];
+  return filterWithinWindow(existing, now).length;
+}
+
 export function resetFraudState(): void {
   txTimestampsByUser.clear();
 }
